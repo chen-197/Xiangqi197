@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/Img">
+        <file>Img/Chu_Bing.png</file>
+        <file>Img/Chu_Jiang.png</file>
+        <file>Img/Chu_Jv.png</file>
+        <file>Img/Chu_Ma.png</file>
+        <file>Img/Chu_Pao.png</file>
+        <file>Img/Chu_Shi.png</file>
+        <file>Img/Chu_Xiang.png</file>
+        <file>Img/Han_Bing.png</file>
+        <file>Img/Han_Jiang.png</file>
+        <file>Img/Han_Jv.png</file>
+        <file>Img/Han_Ma.png</file>
+        <file>Img/Han_Pao.png</file>
+        <file>Img/Han_Shi.png</file>
+        <file>Img/Han_Xiang.png</file>
+        <file>Img/Qipan.png</file>
+    </qresource>
+</RCC>

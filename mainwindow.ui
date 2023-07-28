@@ -1,0 +1,796 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1301</width>
+    <height>796</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>中国象棋</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QLabel" name="Qipan">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>1301</width>
+      <height>701</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="XiangqiImg.qrc">:/Img/Img/Qipan.png</pixmap>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Ma1">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>79</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Ma.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Xiang1">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>158</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Xiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Shi1">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>237</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Shi.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Jiang">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>316</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Jiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Shi2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>395</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Shi.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Xiang2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>474</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Xiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Ma2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>553</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Ma.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Jv2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>632</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Jv.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Bing1">
+    <property name="geometry">
+     <rect>
+      <x>408</x>
+      <y>0</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Bing2">
+    <property name="geometry">
+     <rect>
+      <x>408</x>
+      <y>158</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Bing3">
+    <property name="geometry">
+     <rect>
+      <x>408</x>
+      <y>316</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Bing4">
+    <property name="geometry">
+     <rect>
+      <x>408</x>
+      <y>474</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Bing5">
+    <property name="geometry">
+     <rect>
+      <x>408</x>
+      <y>632</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Pao1">
+    <property name="geometry">
+     <rect>
+      <x>272</x>
+      <y>79</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Pao.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Pao2">
+    <property name="geometry">
+     <rect>
+      <x>272</x>
+      <y>553</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Pao.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="pvp_radioButton">
+    <property name="geometry">
+     <rect>
+      <x>720</x>
+      <y>720</y>
+      <width>71</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>玩家对抗</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="pve_radioButton">
+    <property name="geometry">
+     <rect>
+      <x>810</x>
+      <y>720</y>
+      <width>71</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>人机对抗</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="eve_radioButton">
+    <property name="geometry">
+     <rect>
+      <x>900</x>
+      <y>720</y>
+      <width>71</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>电脑互殴</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>980</x>
+      <y>720</y>
+      <width>16</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>|</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="comboBox">
+    <property name="geometry">
+     <rect>
+      <x>1040</x>
+      <y>720</y>
+      <width>72</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>简单</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>中等</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>困难</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>地狱</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>1000</x>
+      <y>720</y>
+      <width>41</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>难度 :</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Start">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>开始</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Save">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>保存残局</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Pause">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>暂停</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Continue">
+    <property name="geometry">
+     <rect>
+      <x>200</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>继续</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Load">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>载入残局</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Jv1">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>0</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Jv.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Ma1">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>79</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Ma.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Xiang1">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>158</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Xiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Shi1">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>237</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Shi.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Jiang">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>316</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Jiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Shi2">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>395</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Shi.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Xiang2">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>474</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Xiang.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Ma2">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>553</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Ma.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Jv2">
+    <property name="geometry">
+     <rect>
+      <x>1233</x>
+      <y>632</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Jv.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Pao1">
+    <property name="geometry">
+     <rect>
+      <x>961</x>
+      <y>79</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Pao.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Pao2">
+    <property name="geometry">
+     <rect>
+      <x>961</x>
+      <y>553</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Pao.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Bing1">
+    <property name="geometry">
+     <rect>
+      <x>825</x>
+      <y>0</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Bing2">
+    <property name="geometry">
+     <rect>
+      <x>825</x>
+      <y>158</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Bing3">
+    <property name="geometry">
+     <rect>
+      <x>825</x>
+      <y>316</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Bing4">
+    <property name="geometry">
+     <rect>
+      <x>825</x>
+      <y>474</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Han_Bing5">
+    <property name="geometry">
+     <rect>
+      <x>825</x>
+      <y>632</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Han_Bing.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Repent">
+    <property name="geometry">
+     <rect>
+      <x>300</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>悔棋</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Chu_Jv1">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>68</width>
+      <height>68</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image:url(:/Img/Img/Chu_Jv.png);</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>1120</x>
+      <y>720</y>
+      <width>181</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>欢迎！</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1301</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>菜单</string>
+    </property>
+    <widget class="QMenu" name="menu_net">
+     <property name="title">
+      <string>联网模式</string>
+     </property>
+     <addaction name="actionLocal"/>
+     <addaction name="actionLocal_bin"/>
+    </widget>
+    <addaction name="menu_net"/>
+    <addaction name="actionAbout"/>
+   </widget>
+   <addaction name="menu"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionLocal">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>使用本地Python</string>
+   </property>
+  </action>
+  <action name="actionLocal_bin">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>使用本地二进制文件</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>关于</string>
+   </property>
+  </action>
+ </widget>
+ <resources>
+  <include location="XiangqiImg.qrc"/>
+ </resources>
+ <connections/>
+</ui>
