@@ -10,10 +10,15 @@
 #include <QRect>
 #include <QTimer>
 #include <QProcess>
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkRequest>
+#include <QtNetwork/QNetworkReply>
 //#include <sstream>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
 //#include <unistd.h>
 namespace fs = std::filesystem;
 
@@ -26,6 +31,13 @@ class preStep
     preStep();
 };
 
+
+class AllST
+{
+public:
+    QStringList s;
+    QStringList s_tmp;
+};
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -43,9 +55,7 @@ private slots:
 
     bool eventFilter(QObject* obj, QEvent* event);
 
-    void analysisStep(std::string stepStr);
-
-    void on_readoutput();
+    void analysisStep(std::string, bool ifnRepeat);
 
     void xiangqitimeEvent();
 
@@ -67,13 +77,11 @@ private slots:
 
     void on_Load_clicked();
 
-    void chooseBin();
-
-    void choosePy();
-
     void myabout();
 
     void on_pvp_radioButton_clicked();
+
+    void on_Replay_clicked();
 
 private:
     Ui::MainWindow *ui;

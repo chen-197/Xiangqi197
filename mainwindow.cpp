@@ -5,6 +5,7 @@ int clickedButtonNum = -1;
 QPoint mousePoint;
 QPoint relaPoint;
 QPoint beginButtonPoint;
+QPoint pbPoint;
 QPoint qipanCoordinates[9][10] = {};
 QPoint qiziCoordinate[32] = {QPoint(0, 0), QPoint(0, 632), QPoint(0, 79), QPoint(0, 553), QPoint(0, 158), QPoint(0, 474), QPoint(0, 237), QPoint(0, 395), QPoint(0, 316), QPoint(272, 79), QPoint(272, 553), QPoint(408, 0), QPoint(408, 158), QPoint(408, 316), QPoint(408, 474), QPoint(408, 632), QPoint(1233, 0), QPoint(1233, 632), QPoint(1233, 79), QPoint(1233, 553), QPoint(1233, 158), QPoint(1233, 474), QPoint(1233, 237), QPoint(1233, 395), QPoint(1233, 316), QPoint(961, 79), QPoint(961, 553), QPoint(825, 0), QPoint(825, 158), QPoint(825, 316), QPoint(825, 474), QPoint(825, 632)};
 QString qiziIsChuOrHan[32];
@@ -17,17 +18,56 @@ fs::path saveDir = "Saved";
 QPushButton *allButton[32];
 QPushButton *chButton = nullptr;
 QTimer autoTimer;
-QProcess myProcess;
+QNetworkReply* reply;
+QByteArray readInfo;
+QNetworkAccessManager tempManager;
+QNetworkRequest request;
+AllST Steps;
+AllST StepsBak;
+//QProcess myProcess;
 preStep yiqvshiStep;
 preStep huiqiStep;
 preStep cStep;
 int autoNum = 0;
 int autoSum = 0;
+int SumBak = 0;
+int saveNum = 0;
 int distance[4];
+int difficulty = 9;
 int comboIndex = 0;
 bool ifPressed = false;
 bool Pause = false;
 bool ifReadyRead = false;
+bool repl = false;
+double ti;
+char abc[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'};
+
+void savStep(int ty, int tx, AllST &Steps){
+    QStringList tmp;
+    if(!repl) tmp = Steps.s; else tmp = Steps.s_tmp;
+    int s = tmp.length();
+    tmp.append("move:");
+    for(int i = 0; i < 9; i++)
+    {
+        for(int a = 0; a < 10; a++)
+        {
+            if(cStep.prePoint == qipanCoordinates[i][a]) tmp[s]+=(abc[i]+QString::number(9-a));
+        }
+    }
+    tmp[s]+=(abc[ty]+QString::number(9-tx));
+    if(!yiqvshiStep.preButton) tmp[s]+="NU"; else{
+        for(int k = 0; k <= 31; k++)
+        {
+            if(yiqvshiStep.preButton == allButton[k])
+            {
+                if(k < 10) tmp[s]+="0";
+                tmp[s]+=QString::number(k);
+                break;
+            }
+        }
+    } if(!repl) Steps.s = tmp; else Steps.s_tmp = tmp;
+    qDebug() << tmp[s][6].toLatin1();
+}
 
 bool CheckRoundCorrectAndSetRound()
 {
@@ -104,6 +144,20 @@ void ShowfBoxAndQuash(QString text)
     cStep = preStep();
     autoTimer.start(1000);
 }
+
+void processNetReply()
+{
+    if (reply->error() == QNetworkReply::NoError) {
+        readInfo = reply->readAll();
+        //qDebug() << "Response data:" << readInfo;
+        ifReadyRead = true;
+    } else {
+        autoSum = 17;
+    }
+    reply->deleteLater();
+    reply=nullptr;
+}
+
 char qiziCharac(QPushButton *quButton)
 {
     if (quButton == allButton[0] || quButton == allButton[1])
@@ -219,7 +273,6 @@ QString getFEN()
 }
 int charToqipanInt(char charK)
 {
-    char abc[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'};
     for (int i = 0; i < sizeof(abc) / sizeof(abc[0]); i++)
     {
         if (abc[i] == charK)
@@ -229,9 +282,9 @@ int charToqipanInt(char charK)
     }
     return -1;
 }
-void MainWindow::analysisStep(std::string stepStr)
+void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
 {
-    qDebug() << QString::fromStdString(stepStr);
+    //qDebug() << QString::fromStdString(stepStr);
     int charOne = charToqipanInt(stepStr[5]);
     int charTwo = charToqipanInt(stepStr[7]);
     int kq = -1;
@@ -246,7 +299,7 @@ void MainWindow::analysisStep(std::string stepStr)
     stream >> intTwo;
     stream.clear();
     intTwo = 9 - intTwo;
-    qDebug() << "YES1" << charOne << intOne;
+    //qDebug() << "YES1" << charOne << intOne;
     for (int k = 0; k < 32; k++)
     {
         if (QPoint(allButton[k]->x(), allButton[k]->y()) == qipanCoordinates[charOne][intOne])
@@ -257,6 +310,12 @@ void MainWindow::analysisStep(std::string stepStr)
     }
     if (kq == -1)
     {
+        ui->pvp_radioButton->setChecked(true);
+        MainWindow::on_pvp_radioButton_clicked();
+        autoNum = 0;
+        QMessageBox box;
+        box.setText("出错了！无法定位到棋子！可能是中国象棋云库抽风了！");
+        box.exec();
         return;
     }
     chButton = allButton[kq];
@@ -317,8 +376,12 @@ void MainWindow::analysisStep(std::string stepStr)
             }
             ifOver = "none";
             chuhanRound = "none";
+            Steps.s.clear();
             PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
+            break;
+        case QMessageBox::No:
+            ui->Replay->setEnabled(true);
             break;
         default:
             break;
@@ -330,6 +393,7 @@ void MainWindow::analysisStep(std::string stepStr)
         switch (result)
         {
         case QMessageBox::Yes:
+            Steps.s.clear();
             for (int i = 0; i < 32; i++)
             {
                 allButton[i]->move(qiziCoordinate[i]);
@@ -339,17 +403,17 @@ void MainWindow::analysisStep(std::string stepStr)
             PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
             break;
+        case QMessageBox::No:
+            ui->Replay->setEnabled(true);
+            break;
         default:
             break;
         }
     }
     chButton = nullptr;
+    if(ifnRepeat) savStep(ry,rx,Steps);
 }
-void MainWindow::on_readoutput()
-{
-    ifReadyRead = true;
-    qDebug() << "READY!";
-}
+
 void MainWindow::xiangqitimeEvent()
 {
     if (autoNum == 0)
@@ -368,12 +432,27 @@ void MainWindow::xiangqitimeEvent()
     if (autoNum == 2 && chuhanRound == "none")
     {
         chuhanRound = "Chu";
-        qDebug() << "准备观摩一场视觉盛宴吧！";
+        //qDebug() << "准备观摩一场视觉盛宴吧！";
     }
-    if (autoSum == 1)
+    if(autoNum == 3)
+    {
+        if(autoSum < StepsBak.s.length())
+        {
+            analysisStep(StepsBak.s[autoSum].toStdString(),false);
+        }
+        else
+        {
+            ui->pvp_radioButton->setChecked(true);
+            //on_pvp_radioButton_clicked();
+            ui->Replay->setEnabled(true);
+            StepsBak = AllST();
+            ui->Replay->setText("回放");
+        }
+    }
+
+    if (autoSum == 1 && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
     {
         autoTimer.stop();
-        int difficulty = 9;
         if (ui->pve_radioButton->isChecked())
         {
             difficulty = 7 - comboIndex * 2;
@@ -382,68 +461,48 @@ void MainWindow::xiangqitimeEvent()
         {
             difficulty = 9 - comboIndex / 2 * 4;
         }
-        if (ui->actionLocal->isChecked())
-        {
-            std::ofstream fout;
-            fout.open("query.py", std::ios::out);
-            fout << "import requests" << std::endl;
-            fout << "import random" << std::endl;
-            fout << "try:" << std::endl;
-            fout << "    header={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36','Referer': 'http://www.chessdb.cn/',}" << std::endl;
-            fout << "    link = \"http://www.chessdb.cn/chessdb.php?action=queryall&board=" << getFEN().toStdString() << "&showall=1\"" << std::endl;
-            fout << "    r = requests.get(link, headers=header)" << std::endl;
-            fout << "    html = r.content" << std::endl;
-            fout << "    html = html.decode(\"utf-8\")" << std::endl;
-            fout << "    abc = html.split('|')" << std::endl;
-            fout << "    k = random.randint(1,2)" << std::endl;
-            fout << "    if(k == 1):" << std::endl;
-            fout << "        print(abc[0])" << std::endl;
-            fout << "    elif(len(abc) > " << difficulty << "):" << std::endl;
-            fout << "        print(abc[random.randint(1," << difficulty << ")])" << std::endl;
-            fout << "    else:" << std::endl;
-            fout << "        print(abc[random.randint(0,len(abc) - 1)])" << std::endl;
-            fout << "except:" << std::endl;
-            fout << "    print(\"ERROR\")" << std::endl;
-            fout.close();
-            qDebug() << "本次走棋难度系数：" << difficulty;
-            QStringList strlist;
-            strlist << "query.py";
-            myProcess.start("python", strlist);
-        }
-        else if (ui->actionLocal_bin->isChecked())
-        {
-            if (NetBinPath.isEmpty())
-            {
-                autoSum = 0;
-                qDebug() << "ERROR BIN PATH";
-                ui->label_3->setText("ERROR BIN PATH!!!");
-                on_Pause_clicked();
-                return;
-            }
-            QStringList tmpList;
-            tmpList << QString("\"" + getFEN() + "\"") << QString::number(difficulty);
-            myProcess.start(NetBinPath, tmpList);
-        }
-        else
-        {
-            autoSum = 0;
-            qDebug() << "ERROR START QUE!!!";
-            ui->label_3->setText("ERROR START QUE!!!");
-            on_Pause_clicked();
-            return;
-        }
+        request.setUrl(QUrl("http://www.chessdb.cn/chessdb.php?action=queryall&board="+getFEN()+"&showall=1"));
+        reply = tempManager.get(request);
+        connect(reply, &QNetworkReply::finished, processNetReply);
         autoTimer.start(1000);
     }
+
     if (ifReadyRead)
     {
         autoTimer.stop();
         ifReadyRead = false;
         autoSum = 0;
-        QString readInfo = myProcess.readAll();
         ui->label_3->setText("已成功连接至中国象棋云库！");
         if (readInfo[0] == 'm' && readInfo[1] == 'o' && readInfo[2] == 'v')
         {
-            analysisStep(readInfo.toStdString());
+            QByteArrayList BAList;
+            if(readInfo.contains('|'))
+            {
+                BAList = readInfo.split('|');
+            }
+            else
+            {
+                BAList.append(readInfo);
+            }
+            int one = rand() % 2 + 1;
+            int t = 0;
+            if(one == 1)
+            {
+                t = 0;
+            }
+            else if(BAList.length()>difficulty)
+            {
+                t = rand()%difficulty+1;
+            }
+            else if(BAList.length()>1)
+            {
+                t=rand()%(BAList.length() - 1);
+            }
+            else
+            {
+                t=0;
+            }
+            analysisStep(BAList[t].toStdString());
             autoTimer.start(1000);
         }
         else if (readInfo[0] == 'E')
@@ -484,6 +543,7 @@ void MainWindow::xiangqitimeEvent()
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
             QMessageBox box;
+            ui->Replay->setEnabled(true);
             box.setText("胜负已分！");
             box.exec();
         }
@@ -498,13 +558,11 @@ void MainWindow::xiangqitimeEvent()
             box.exec();
         }
     }
-    if (!ifReadyRead && autoSum > 16)
+    if (!ifReadyRead && autoSum > 16 && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
     {
         autoTimer.stop();
         ui->pvp_radioButton->setChecked(true);
         MainWindow::on_pvp_radioButton_clicked();
-        autoSum = 0; // 这一行其实没啥用，因为上面的函数调用已经有相关部分了，写出来就当提示一下此处应该有该部分吧。
-        autoNum = 0;
         ui->label_3->setText("2型网络异常！");
         ifReadyRead = false;
         QMessageBox box;
@@ -582,6 +640,7 @@ MainWindow::MainWindow(QWidget *parent)
     allButton[29] = ui->Han_Bing3;
     allButton[30] = ui->Han_Bing4;
     allButton[31] = ui->Han_Bing5;
+    //目前没找到把所有棋子对象统一管理的更好办法...
     for (int e = 0; e < 32; e++)
     {
         allButton[e]->installEventFilter(this);
@@ -600,16 +659,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&autoTimer, SIGNAL(timeout()), this, SLOT(xiangqitimeEvent()));
     ui->pvp_radioButton->setChecked(true);
     ui->Continue->setEnabled(false);
-    connect(&myProcess, SIGNAL(readyReadStandardOutput()), this, SLOT(on_readoutput()));
-    connect(ui->actionLocal, SIGNAL(triggered()), this, SLOT(choosePy()));
-    connect(ui->actionLocal_bin, SIGNAL(triggered()), this, SLOT(chooseBin()));
+    ui->Replay->setEnabled(false);
     connect(ui->actionAbout, SIGNAL(triggered()), this, SLOT(myabout()));
 }
 
 MainWindow::~MainWindow()
 {
-    myProcess.kill();
-    myProcess.waitForFinished();
+    if(reply)
+    {
+        delete reply;
+    }
     delete ui;
 }
 
@@ -652,8 +711,9 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             return true;
         }
         autoTimer.stop();
-        myProcess.kill();
-        myProcess.waitForFinished();
+        if(reply) {reply->abort();
+            reply->deleteLater();
+            reply=nullptr;}
         autoSum = 0;
     }
     for (int B = 0; B < 32; B++)
@@ -667,16 +727,16 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 chButton->raise();
                 if (!CheckRoundCorrectAndSetRound())
                 {
-                    return false;
+                    return true;
                 }
                 cStep = preStep(chButton, QPoint(chButton->x(), chButton->y()));
                 relaPoint = QPoint(mouseEvent->x(), mouseEvent->y());
-                return false;
+                return true;
             }
             else if (event->type() == QEvent::MouseMove && ifPressed)
             {
                 chButton->move(mouseEvent->x() + chButton->x() - relaPoint.x(), mouseEvent->y() + chButton->y() - relaPoint.y());
-                return false;
+                return true;
             }
             break;
         }
@@ -689,7 +749,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         autoTimer.start(1000);
         if (chButton == nullptr || cStep.preButton == nullptr)
         {
-            return false;
+            return true;
         }
         ifPressed = false;
         int rx, ry;
@@ -735,7 +795,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             cStep.preButton->move(cStep.prePoint);
             cStep = preStep();
             chuhanRound = PrechuhanRound;
-            return false;
+            return true;
         }
         if (chButton == allButton[0] || chButton == allButton[1] || chButton == allButton[16] || chButton == allButton[17])
         {
@@ -751,7 +811,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                             if (QPoint(allButton[s]->x(), allButton[s]->y()) == qipanCoordinates[ry][i] && i != rx)
                             {
                                 ShowfBoxAndQuash("您的落点是错误的，您不应该让车跨过棋子行进。");
-                                return false;
+                                return true;
                             }
                         }
                     }
@@ -765,7 +825,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                             if (QPoint(allButton[s]->x(), allButton[s]->y()) == qipanCoordinates[i][rx] && i != ry)
                             {
                                 ShowfBoxAndQuash("您的落点是错误的，您不应该让车跨过棋子行进。");
-                                return false;
+                                return true;
                             }
                         }
                     }
@@ -774,7 +834,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             else
             {
                 ShowfBoxAndQuash("您的落点是错误的，车只能直行。");
-                return false;
+                return true;
             }
         }
         if (chButton == allButton[2] || chButton == allButton[3] || chButton == allButton[18] || chButton == allButton[19])
@@ -783,7 +843,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (!((absoluteValue(pWidth) == 2 && absoluteValue(pHeight) == 1) || (absoluteValue(pWidth) == 1 && absoluteValue(pHeight) == 2)))
             {
                 ShowfBoxAndQuash("您的落点是错误的，马只能走日。");
-                return false;
+                return true;
             }
             else if (absoluteValue(pWidth) == 2)
             {
@@ -792,7 +852,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     if (QPoint(allButton[i]->x(), allButton[i]->y()) == qipanCoordinates[rh][rw + pWidth / absoluteValue(pWidth)])
                     {
                         ShowfBoxAndQuash("您的落点是错误的，拌马脚了。");
-                        return false;
+                        return true;
                     }
                 }
             }
@@ -803,7 +863,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     if (QPoint(allButton[i]->x(), allButton[i]->y()) == qipanCoordinates[rh + pHeight / absoluteValue(pHeight)][rw])
                     {
                         ShowfBoxAndQuash("您的落点是错误的，拌马脚了。");
-                        return false;
+                        return true;
                     }
                 }
             }
@@ -815,7 +875,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx > 4)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，相不能越界。");
-                    return false;
+                    return true;
                 }
             }
             else if (chButton == allButton[20] || chButton == allButton[21])
@@ -823,21 +883,21 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx <= 4)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，相不能越界。");
-                    return false;
+                    return true;
                 }
             }
 
             if (!(absoluteValue(pWidth) == 2 && absoluteValue(pHeight) == 2))
             {
                 ShowfBoxAndQuash("您的落点是错误的，相只能走田。");
-                return false;
+                return true;
             }
             for (int i = 0; i < 32; i++)
             {
                 if (QPoint(allButton[i]->x(), allButton[i]->y()) == qipanCoordinates[rh + pHeight / absoluteValue(pHeight)][rw + pWidth / absoluteValue(pWidth)])
                 {
                     ShowfBoxAndQuash("您的落点是错误的，塞相眼了。");
-                    return false;
+                    return true;
                 }
             }
         }
@@ -848,7 +908,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx > 2 || ry < 3 || ry > 5)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，士不能出格。");
-                    return false;
+                    return true;
                 }
             }
             else if (chButton == allButton[22] || chButton == allButton[23])
@@ -856,13 +916,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx < 7 || ry < 3 || ry > 5)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，士不能出格。");
-                    return false;
+                    return true;
                 }
             }
             if (absoluteValue(pWidth) != 1 || absoluteValue(pHeight) != 1)
             {
                 ShowfBoxAndQuash("您的落点是错误的，士只能走斜线。");
-                return false;
+                return true;
             }
         }
         if (chButton == allButton[8] || chButton == allButton[24])
@@ -872,7 +932,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx > 2 || ry < 3 || ry > 5)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，将不能出格。");
-                    return false;
+                    return true;
                 }
             }
             if (chButton == allButton[24])
@@ -880,13 +940,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx < 7 || ry < 3 || ry > 5)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，将不能出格。");
-                    return false;
+                    return true;
                 }
             }
             if (!(absoluteValue(pWidth) == 0 && absoluteValue(pHeight) == 1) && !(absoluteValue(pWidth) == 1 && absoluteValue(pHeight) == 0))
             {
                 ShowfBoxAndQuash("您的落点是错误的，将只能直走一格。");
-                return false;
+                return true;
             }
         }
         if (chButton == allButton[9] || chButton == allButton[10] || chButton == allButton[25] || chButton == allButton[26])
@@ -915,17 +975,17 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     if (ifexq > 1)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮最多只能翻越一个棋子。");
-                        return false;
+                        return true;
                     }
                     if (ifexq == 1 && !iffinexq)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮不能只翻过棋子而不吃棋子。");
-                        return false;
+                        return true;
                     }
                     if (!ifexq && iffinexq)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮不能不翻过棋子而吃掉棋子。");
-                        return false;
+                        return true;
                     }
                 }
                 if (pHeight != 0)
@@ -948,24 +1008,24 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     if (ifexq > 1)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮最多只能翻越一个棋子。");
-                        return false;
+                        return true;
                     }
                     if (ifexq == 1 && !iffinexq)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮不能只翻过棋子而不吃棋子。");
-                        return false;
+                        return true;
                     }
                     if (!ifexq && iffinexq)
                     {
                         ShowfBoxAndQuash("您的落点是错误的，炮不能不翻过棋子而吃掉棋子。");
-                        return false;
+                        return true;
                     }
                 }
             }
             else
             {
                 ShowfBoxAndQuash("您的落点是错误的，炮只能直行。");
-                return false;
+                return true;
             }
         }
         if (chButton == allButton[11] || chButton == allButton[12] || chButton == allButton[13] || chButton == allButton[14] || chButton == allButton[15] || chButton == allButton[27] || chButton == allButton[28] || chButton == allButton[29] || chButton == allButton[30] || chButton == allButton[31])
@@ -975,12 +1035,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx <= 4 && absoluteValue(pHeight))
                 {
                     ShowfBoxAndQuash("您的落点是错误的，兵在过河前不能左右行动。");
-                    return false;
+                    return true;
                 }
                 if (pWidth < 0)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，兵在任何情况下不能后退。");
-                    return false;
+                    return true;
                 }
             }
             if (chButton == allButton[27] || chButton == allButton[28] || chButton == allButton[29] || chButton == allButton[30] || chButton == allButton[31])
@@ -988,18 +1048,18 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (rx > 4 && absoluteValue(pHeight))
                 {
                     ShowfBoxAndQuash("您的落点是错误的，兵在过河前不能左右行动。");
-                    return false;
+                    return true;
                 }
                 if (pWidth > 0)
                 {
                     ShowfBoxAndQuash("您的落点是错误的，兵在任何情况下不能后退。");
-                    return false;
+                    return true;
                 }
             }
             if (!(absoluteValue(pWidth) == 0 && absoluteValue(pHeight) == 1) && !(absoluteValue(pWidth) == 1 && absoluteValue(pHeight) == 0))
             {
                 ShowfBoxAndQuash("您的落点是错误的，兵只能直走一格。");
-                return false;
+                return true;
             }
         }
         // 以下内容可能有问题，有一次不知怎么的一个黑方小兵竟然吃了另一个黑方小兵，但是奇怪的是此后又恢复正常了，我也无法复现...
@@ -1019,7 +1079,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     if (allButton[s] == chButton && qiziIsChuOrHan[s] == qiziIsChuOrHan[i])
                     {
                         ShowfBoxAndQuash("您的落点是错误的，您不应该自己吃自己的棋子。");
-                        return false;
+                        return true;
                     }
                     else if (allButton[s] == chButton && qiziIsChuOrHan[s] != qiziIsChuOrHan[i])
                     {
@@ -1063,7 +1123,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     yiqvshiStep.preButton->move(yiqvshiStep.prePoint);
                     yiqvshiStep = preyiqvshi;
                 }
-                return false;
+                return true;
             }
         }
         if (ifOver == "none")
@@ -1087,8 +1147,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
                 ifOver = "none";
                 chuhanRound = "none";
+                Steps.s.clear();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
+                break;
+            case QMessageBox::No:
+                ui->Replay->setEnabled(true);
                 break;
             default:
                 break;
@@ -1106,15 +1170,19 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
                 ifOver = "none";
                 chuhanRound = "none";
+                Steps.s.clear();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
+                break;
+            case QMessageBox::No:
+                ui->Replay->setEnabled(true);
                 break;
             default:
                 break;
             }
         }
         chButton = nullptr;
-        return false;
+        savStep(ry, rx,Steps);
     }
     return false;
 }
@@ -1125,9 +1193,13 @@ void MainWindow::on_Start_clicked()
     switch (result)
     {
     case QMessageBox::Yes:
-        myProcess.kill();
-        myProcess.waitForFinished();
-        myProcess.readAll();
+        ui->Replay->setEnabled(false);
+        ui->Replay->setText("回放");
+        autoNum=saveNum;
+        if(reply){
+            reply->abort();
+            reply->deleteLater();
+            reply=nullptr;}
         ifReadyRead = false;
         autoSum = 0;
         for (int i = 0; i < 32; i++)
@@ -1140,6 +1212,8 @@ void MainWindow::on_Start_clicked()
         yiqvshiStep = preStep();
         huiqiStep = preStep();
         MainWindow::on_Continue_clicked();
+        Steps.s.clear();
+        StepsBak = AllST();
         break;
     default:
         break;
@@ -1159,9 +1233,11 @@ void MainWindow::on_Pause_clicked()
     Pause = true;
     ui->label_3->setText("已暂停");
     autoTimer.stop();
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(reply){
+        reply->abort();
+        reply->deleteLater();
+        reply=nullptr;}
+    SumBak = autoSum;
     autoSum = 0;
     ifReadyRead = false;
     ui->Continue->setEnabled(true);
@@ -1174,6 +1250,10 @@ void MainWindow::on_Continue_clicked()
     if (!ui->pvp_radioButton->isChecked())
     {
         autoTimer.start(1000);
+    }
+    if (autoNum == 3){
+        autoSum = SumBak;
+        autoTimer.start(ti*1000);
     }
     ui->Pause->setEnabled(true);
     ui->Continue->setEnabled(false);
@@ -1188,27 +1268,40 @@ void MainWindow::on_Repent_clicked()
         plzBox.exec();
         return;
     }
-    if (huiqiStep.preButton == nullptr)
+    if (!Steps.s.length())
     {
         QMessageBox huiqiBox;
         huiqiBox.setText("您无棋可悔");
         huiqiBox.exec();
         return;
     }
+    if(!Pause && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
+    {
+        QMessageBox huiqiPBox;
+        huiqiPBox.setText("在交战双方存在电脑时，请先点击暂停再悔棋");
+        huiqiPBox.exec();
+        return;
+    }
     MainWindow::setEnabled(false);
+    if(reply) {reply->abort();
+    reply->deleteLater();
+        reply=nullptr;}
     autoTimer.stop();
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
     autoSum = 0;
     ifReadyRead = false;
-    huiqiStep.preButton->move(huiqiStep.prePoint);
-    if (yiqvshiStep.preButton != nullptr)
-    {
-        yiqvshiStep.preButton->move(yiqvshiStep.prePoint);
-        yiqvshiStep = preStep();
-    }
-    huiqiStep = preStep();
+    int s = Steps.s.length() - 1;
+    QChar t,r;
+    qDebug() << Steps.s[s];
+    t = Steps.s[s][7];
+    r = Steps.s[s][8];
+    Steps.s[s][7] = Steps.s[s][5];
+    Steps.s[s][8] = Steps.s[s][6];
+    Steps.s[s][5] = t;
+    Steps.s[s][6] = r;
+    analysisStep(Steps.s[s].toStdString(), false);
+    //qDebug() << qipanCoordinates[charToqipanInt(Steps.s[s][7].toLatin1())][9-QString(Steps.s[s][8]).toInt()] << charToqipanInt(Steps.s[s][7].toLatin1()) << 9-QString(Steps.s[s][8]).toInt() << Steps.s[s].mid(9,2).toInt();
+    if(Steps.s[s][9] != 'N') allButton[Steps.s[s].mid(9,2).toInt()]->move(qipanCoordinates[charToqipanInt(Steps.s[s][5].toLatin1())][9-QString(Steps.s[s][6]).toInt()]);
+    Steps.s.removeAt(s);
     if (chuhanRound == "Chu")
     {
         chuhanRound = "Han";
@@ -1217,7 +1310,6 @@ void MainWindow::on_Repent_clicked()
     {
         chuhanRound = "Chu";
     }
-    autoTimer.start(1000);
     MainWindow::setEnabled(true);
 }
 
@@ -1230,7 +1322,10 @@ void MainWindow::on_pve_radioButton_clicked()
         plzBox.exec();
         return;
     }
-    // bool ifTimerIsActive = autoTimer.isActive();
+    ui->Replay->setText("回放");
+    ui->Replay->setEnabled(false);
+    //StepsBak = AllST();
+    autoTimer.stop();
     QStringList items = {"楚（黑方）", "汉（红方）"};
     QString item = QInputDialog::getItem(this, "人机对战", "请选择作为电脑的一方:", items, 0, false);
     if (item == "楚（黑方）")
@@ -1243,13 +1338,22 @@ void MainWindow::on_pve_radioButton_clicked()
     }
     ui->label_3->setText("正在执行切换，请耐心等待...");
     MainWindow::setEnabled(false);
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(reply){
+        reply->abort();
+    reply->deleteLater();
+        reply=nullptr;
+    }
     autoSum = 0;
     ifReadyRead = false;
+    if(repl)
+    {
+        Steps.s = Steps.s_tmp;
+        Steps.s_tmp.clear();
+        repl = false;
+    }
     MainWindow::setEnabled(true);
     ui->label_3->setText("切换完毕！");
+    saveNum = autoNum;
     if (!Pause)
     {
         autoTimer.start(1000);
@@ -1265,12 +1369,23 @@ void MainWindow::on_eve_radioButton_clicked()
         plzBox.exec();
         return;
     }
+    ui->Replay->setText("回放");
     autoNum = 2;
+    saveNum = autoNum;
+    //StepsBak = AllST();
     ui->label_3->setText("正在执行切换，请耐心等待...");
+    ui->Replay->setEnabled(false);
     MainWindow::setEnabled(false);
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(repl)
+    {
+        Steps.s = Steps.s_tmp;
+        Steps.s_tmp.clear();
+        repl = false;
+    }
+    if (reply){
+        reply->abort();
+    reply->deleteLater();
+        reply=nullptr;}
     autoSum = 0;
     ifReadyRead = false;
     MainWindow::setEnabled(true);
@@ -1296,9 +1411,10 @@ void MainWindow::on_Save_clicked()
         return;
     }
     autoTimer.stop();
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(reply){
+        reply->abort();
+    reply->deleteLater();
+        reply=nullptr;}
     ifReadyRead = false;
     autoSum = 0;
     if (!fs::exists(saveDir))
@@ -1329,11 +1445,11 @@ void MainWindow::on_Save_clicked()
         fout.close();
         return;
     }
-    for (int i = 0; i < 32; i++)
+    fout << chuhanRound.toStdString() << "\n";
+    for (int i = 0; i < Steps.s.length(); i++)
     {
-        fout << "(" << allButton[i]->x() << "," << allButton[i]->y() << ")" << std::endl;
+        fout << Steps.s[i].toStdString() << "\n";
     }
-    fout << chuhanRound.toStdString();
     fout.close();
     if (!Pause)
     {
@@ -1345,9 +1461,10 @@ void MainWindow::on_Save_clicked()
 void MainWindow::on_Load_clicked()
 {
     autoTimer.stop();
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(reply){
+        reply->abort();
+    reply->deleteLater();
+        reply=nullptr;}
     ifReadyRead = false;
     autoSum = 0;
     QString fileLoadName;
@@ -1360,6 +1477,7 @@ void MainWindow::on_Load_clicked()
         Box.exec();
         return;
     }
+    Steps.s.clear();
     std::ifstream fin;
     fin.open(fileLoadName.toLocal8Bit().toStdString(), std::ios::in);
     if (!fin.is_open())
@@ -1371,44 +1489,14 @@ void MainWindow::on_Load_clicked()
         return;
     }
     int a = 0;
+    Steps.s.clear();
     while (getline(fin, str))
     {
-        if (a < 32)
+        if (a > 0)
         {
-            QString toIntTemp;
-            int gx, gy, s;
-            for (int i = 1; str[i] != ','; i++)
-            {
-                s = i;
-                toIntTemp += str[i];
-                qDebug() << QString::fromStdString(str) << "里" << QString(str[i]) << "进入流";
-                if (i > 10) // 如遇到文件错误也能够退出循环
-                {
-                    QMessageBox msgBox;
-                    msgBox.setText("ERROR!");
-                    msgBox.exec();
-                    return;
-                }
-            }
-            gx = toIntTemp.toInt();
-            toIntTemp = QString();
-            for (int i = s + 2; str[i] != ')'; i++)
-            {
-                toIntTemp += str[i];
-                qDebug() << QString::fromStdString(str) << "里" << QString(str[i]) << "进入流";
-                if (i > 14) // 如遇到文件错误也能够退出循环
-                {
-                    QMessageBox msgBox;
-                    msgBox.setText("ERROR!");
-                    msgBox.exec();
-                    return;
-                }
-            }
-            gy = toIntTemp.toInt();
-            toIntTemp = QString();
-            allButton[a]->move(gx, gy);
+            analysisStep(str);
         }
-        else if (a == 32)
+        else if (a == 0)
         {
             // 考虑到文件内容可能会出问题，故采用此写法。
             if (str == "Chu")
@@ -1441,45 +1529,28 @@ void MainWindow::on_Load_clicked()
 
 void MainWindow::on_pvp_radioButton_clicked()
 {
+    ui->Replay->setEnabled(false);
     autoSum = 0;
     autoNum = 0;
+    if(repl)
+    {
+        Steps.s = Steps.s_tmp;
+        Steps.s_tmp.clear();
+        repl = false;
+    }
     autoTimer.stop();
+    ui->Replay->setText("回放");
     ui->label_3->setText("正在执行切换，请耐心等待...");
+    saveNum = autoNum;
+    //StepsBak = AllST();
     MainWindow::setEnabled(false);
-    myProcess.kill();
-    myProcess.waitForFinished();
-    myProcess.readAll();
+    if(reply){
+        reply->abort();
+    reply->deleteLater();
+        reply=nullptr;}
     ifReadyRead = false;
     MainWindow::setEnabled(true);
     ui->label_3->setText("切换完毕！");
-}
-
-void MainWindow::chooseBin()
-{
-    qDebug() << "RUN chooseBin()";
-    on_Pause_clicked();
-    QString tempPath;
-    tempPath = QFileDialog::getOpenFileName(this, "选择二进制文件", "./", "二进制文件(*.que)");
-    if (tempPath.isEmpty())
-    {
-        ui->actionLocal->setChecked(true);
-        ui->actionLocal_bin->setChecked(false);
-        NetBinPath = QString();
-        QMessageBox Box;
-        Box.setText("没有选中文件!");
-        Box.exec();
-        return;
-    }
-    NetBinPath = tempPath;
-    ui->actionLocal->setChecked(false);
-}
-
-void MainWindow::choosePy()
-{
-    qDebug() << "RUN choosePy()";
-    NetBinPath = QString();
-    on_Pause_clicked();
-    ui->actionLocal_bin->setChecked(false);
 }
 
 void MainWindow::myabout()
@@ -1488,3 +1559,33 @@ void MainWindow::myabout()
     aboBox.setText("Made by Chen-197\nLicense: GPL-3.0");
     aboBox.exec();
 }
+
+void MainWindow::on_Replay_clicked()
+{
+    autoTimer.stop();
+    QStringList items = {"0.1","0.2","0.4","1.0","2.0","2.5","4.0"};
+    QString item = QInputDialog::getItem(this, "回放", "请选择时钟周期，单位：秒", items, 0, false);
+    double t;
+    if(item!="")t=item.toDouble();else return;
+    for (int i = 0; i < 32; i++)
+    {
+        allButton[i]->move(qiziCoordinate[i]);
+    }
+    ifOver = "none";
+    chuhanRound = "none";
+    PrechuhanRound = "none";
+    ui->pvp_radioButton->setChecked(true);
+    ui->pvp_radioButton->setChecked(false);
+    on_pvp_radioButton_clicked();
+    ui->Replay->setText("回放中");
+    if (Steps.s.length()){
+        StepsBak = Steps;
+    }
+    repl = true;
+    ui->Replay->setEnabled(false);
+    autoSum = 0;
+    autoNum = 3;
+    autoTimer.start(1000*t);
+    ti = t;
+}
+

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1301</width>
+    <width>1299</width>
     <height>796</height>
    </rect>
   </property>
@@ -721,9 +721,9 @@
    <widget class="QLabel" name="label_3">
     <property name="geometry">
      <rect>
-      <x>1120</x>
+      <x>1130</x>
       <y>720</y>
-      <width>181</width>
+      <width>171</width>
       <height>24</height>
      </rect>
     </property>
@@ -734,13 +734,26 @@
      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
     </property>
    </widget>
+   <widget class="QPushButton" name="Replay">
+    <property name="geometry">
+     <rect>
+      <x>600</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>回放</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1301</width>
+     <width>1299</width>
      <height>20</height>
     </rect>
    </property>
@@ -748,41 +761,11 @@
     <property name="title">
      <string>菜单</string>
     </property>
-    <widget class="QMenu" name="menu_net">
-     <property name="title">
-      <string>联网模式</string>
-     </property>
-     <addaction name="actionLocal"/>
-     <addaction name="actionLocal_bin"/>
-    </widget>
-    <addaction name="menu_net"/>
     <addaction name="actionAbout"/>
    </widget>
    <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionLocal">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>使用本地Python</string>
-   </property>
-  </action>
-  <action name="actionLocal_bin">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
-   <property name="text">
-    <string>使用本地二进制文件</string>
-   </property>
-  </action>
   <action name="actionAbout">
    <property name="text">
     <string>关于</string>
