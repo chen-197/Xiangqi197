@@ -379,6 +379,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
             Steps.s.clear();
             PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
+            if(autoNum == 3) on_pvp_radioButton_clicked();
             break;
         case QMessageBox::No:
             ui->Replay->setEnabled(true);
@@ -402,6 +403,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
             chuhanRound = "none";
             PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
+            if(autoNum == 3) on_pvp_radioButton_clicked();
             break;
         case QMessageBox::No:
             ui->Replay->setEnabled(true);
@@ -411,7 +413,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
         }
     }
     chButton = nullptr;
-    if(ifnRepeat) savStep(ry,rx,Steps);
+    savStep(ry,rx,Steps);
 }
 
 void MainWindow::xiangqitimeEvent()
@@ -443,7 +445,7 @@ void MainWindow::xiangqitimeEvent()
         else
         {
             ui->pvp_radioButton->setChecked(true);
-            //on_pvp_radioButton_clicked();
+            on_pvp_radioButton_clicked();
             ui->Replay->setEnabled(true);
             StepsBak = AllST();
             ui->Replay->setText("回放");
@@ -1150,6 +1152,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 Steps.s.clear();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
+                if(autoNum == 3) on_pvp_radioButton_clicked();
                 break;
             case QMessageBox::No:
                 ui->Replay->setEnabled(true);
@@ -1173,6 +1176,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 Steps.s.clear();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
+                if(autoNum == 3) on_pvp_radioButton_clicked();
                 break;
             case QMessageBox::No:
                 ui->Replay->setEnabled(true);
@@ -1537,6 +1541,7 @@ void MainWindow::on_pvp_radioButton_clicked()
         Steps.s = Steps.s_tmp;
         Steps.s_tmp.clear();
         repl = false;
+        qDebug() << Steps.s << "!!!";
     }
     autoTimer.stop();
     ui->Replay->setText("回放");
@@ -1580,6 +1585,7 @@ void MainWindow::on_Replay_clicked()
     ui->Replay->setText("回放中");
     if (Steps.s.length()){
         StepsBak = Steps;
+        qDebug() << "456";
     }
     repl = true;
     ui->Replay->setEnabled(false);
