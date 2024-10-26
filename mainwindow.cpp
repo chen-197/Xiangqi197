@@ -1481,7 +1481,6 @@ void MainWindow::on_Load_clicked()
         Box.exec();
         return;
     }
-    Steps.s.clear();
     std::ifstream fin;
     fin.open(fileLoadName.toLocal8Bit().toStdString(), std::ios::in);
     if (!fin.is_open())
@@ -1493,7 +1492,12 @@ void MainWindow::on_Load_clicked()
         return;
     }
     int a = 0;
-    Steps.s.clear();
+    for (int i = 0; i < 32; i++)
+    {
+        allButton[i]->move(qiziCoordinate[i]);
+    }
+    Steps = AllST();
+    StepsBak = AllST();
     while (getline(fin, str))
     {
         if (a > 0)
