@@ -66,7 +66,7 @@ void savStep(int ty, int tx, AllST &Steps){
             }
         }
     } if(!repl) Steps.s = tmp; else Steps.s_tmp = tmp;
-    qDebug() << tmp[s][6].toLatin1();
+    //qDebug() << tmp[s][6].toLatin1();
 }
 
 bool CheckRoundCorrectAndSetRound()
@@ -134,7 +134,7 @@ void ShowfBoxAndQuash(QString text)
     chuhanRound = PrechuhanRound;
     if (cStep.preButton == nullptr)
     {
-        qDebug() << "ERROR!";
+        //qDebug() << "ERROR!";
         return;
     }
     QMessageBox fBox;
@@ -268,7 +268,7 @@ QString getFEN()
     {
         FEN_TEMP += " w";
     }
-    qDebug() << FEN_TEMP;
+    //qDebug() << FEN_TEMP;
     return FEN_TEMP;
 }
 int charToqipanInt(char charK)
@@ -602,12 +602,12 @@ MainWindow::MainWindow(QWidget *parent)
             if (s <= 4)
             {
                 qipanCoordinates[i][s] = QPoint(s * 136, i * 79);
-                qDebug() << qipanCoordinates[i][s];
+                //qDebug() << qipanCoordinates[i][s];
             }
             else
             {
                 qipanCoordinates[i][s] = QPoint(1233 - 136 * (9 - s), i * 79);
-                qDebug() << qipanCoordinates[i][s];
+                //qDebug() << qipanCoordinates[i][s];
             }
         }
     }
@@ -1296,7 +1296,7 @@ void MainWindow::on_Repent_clicked()
     ifReadyRead = false;
     int s = Steps.s.length() - 1;
     QChar t,r;
-    qDebug() << Steps.s[s];
+    //qDebug() << Steps.s[s];
     t = Steps.s[s][7];
     r = Steps.s[s][8];
     Steps.s[s][7] = Steps.s[s][5];
@@ -1428,7 +1428,7 @@ void MainWindow::on_Save_clicked()
     }
     else
     {
-        qDebug() << "Existed!Pass!";
+        //qDebug() << "Existed!Pass!";
     }
     bool ifOK = false;
     QString savedFileName = QInputDialog::getText(NULL, "保存", "请输入存档名(不要带有空格!):", QLineEdit::Normal, "", &ifOK);
@@ -1546,7 +1546,7 @@ void MainWindow::on_pvp_radioButton_clicked()
         Steps.s = Steps.s_tmp;
         Steps.s_tmp.clear();
         repl = false;
-        qDebug() << Steps.s << "!!!";
+        //qDebug() << Steps.s << "!!!";
     }
     autoTimer.stop();
     ui->Replay->setText("回放");
@@ -1590,7 +1590,7 @@ void MainWindow::on_Replay_clicked()
     ui->Replay->setText("回放中");
     if (Steps.s.length()){
         StepsBak = Steps;
-        qDebug() << "456";
+        //qDebug() << "456";
     }
     repl = true;
     ui->Replay->setEnabled(false);
