@@ -447,6 +447,7 @@ void MainWindow::xiangqitimeEvent()
             ui->pvp_radioButton->setChecked(true);
             on_pvp_radioButton_clicked();
             ui->Replay->setEnabled(true);
+            ui->Repent->setEnabled(true);
             StepsBak = AllST();
             ui->Replay->setText("回放");
         }
@@ -1593,6 +1594,7 @@ void MainWindow::on_Replay_clicked()
     }
     repl = true;
     ui->Replay->setEnabled(false);
+    ui->Repent->setEnabled(false);
     autoSum = 0;
     autoNum = 3;
     autoTimer.start(1000*t);
