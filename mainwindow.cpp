@@ -413,7 +413,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
         }
     }
     chButton = nullptr;
-    savStep(ry,rx,Steps);
+    if (ifnRepeat) savStep(ry,rx,Steps);
 }
 
 void MainWindow::xiangqitimeEvent()
@@ -1533,6 +1533,8 @@ void MainWindow::on_Load_clicked()
     {
         autoTimer.start(1000);
     }
+    //qDebug() << Steps.s << "\n" << "and";
+    //qDebug() << Steps.s_tmp;
     return;
 }
 
