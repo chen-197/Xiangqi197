@@ -2,17 +2,27 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QAction>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QInputDialog>
 #include <QFileDialog>
 #include <QPoint>
 #include <QRect>
+
+#include <QVector>
+#include <QWidget>
+
+#include <QHash>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QSize>
 #include <QTimer>
 #include <QProcess>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkReply>
+#include <string>
 //#include <sstream>
 #include <filesystem>
 #include <fstream>
@@ -51,11 +61,43 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+
+private:
+    struct PieceCell
+    {
+        int file = -1;  // 0..8
+        int rank = -1;  // 0..9
+        bool captured = false;
+    };
+
+    void captureBaseLayout();
+    void applyScaledLayout();
+    void recomputeBoardCoordinates();
+    void updateInitialPieceCoords();
+    QVector<PieceCell> snapshotPieceCells() const;
+    void restorePieceCells(const QVector<PieceCell>& cells);
+    void prepareScalableImages();
+    bool isPieceButton(const QWidget* w) const;
+
+    bool m_baseCaptured = false;
+    bool m_firstShowApplied = false;
+    QSize m_designCentralSize;
+    QHash<QWidget*, QRect> m_baseGeom;
+    QHash<QWidget*, int> m_baseFontPt;
+    double m_scaleX = 1.0;
+    double m_scaleY = 1.0;
+    QPoint m_offset = QPoint(0, 0);
+    int m_pieceSize = 68;
+
 private slots:
 
     bool eventFilter(QObject* obj, QEvent* event);
 
-    void analysisStep(std::string, bool ifnRepeat);
+    void analysisStep(const std::string& stepStr, bool ifnRepeat = true);
 
     void xiangqitimeEvent();
 
@@ -78,6 +120,8 @@ private slots:
     void on_Load_clicked();
 
     void myabout();
+
+    void on_actionCloudbookSettings_triggered();
 
     void on_pvp_radioButton_clicked();
 

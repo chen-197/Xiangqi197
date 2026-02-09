@@ -1,13 +1,27 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include <QPointer>
+#include <QUrlQuery>
+#include <QSettings>
+#include <QDialog>
+#include <QFormLayout>
+#include <QDialogButtonBox>
+#include <QRegularExpression>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <cctype>
+#include <string>
+#include <algorithm>
+#include <limits>
+
 int clickedButtonNum = -1;
 QPoint mousePoint;
 QPoint relaPoint;
 QPoint beginButtonPoint;
 QPoint pbPoint;
 QPoint qipanCoordinates[9][10] = {};
-QPoint qiziCoordinate[32] = {QPoint(0, 0), QPoint(0, 632), QPoint(0, 79), QPoint(0, 553), QPoint(0, 158), QPoint(0, 474), QPoint(0, 237), QPoint(0, 395), QPoint(0, 316), QPoint(272, 79), QPoint(272, 553), QPoint(408, 0), QPoint(408, 158), QPoint(408, 316), QPoint(408, 474), QPoint(408, 632), QPoint(1233, 0), QPoint(1233, 632), QPoint(1233, 79), QPoint(1233, 553), QPoint(1233, 158), QPoint(1233, 474), QPoint(1233, 237), QPoint(1233, 395), QPoint(1233, 316), QPoint(961, 79), QPoint(961, 553), QPoint(825, 0), QPoint(825, 158), QPoint(825, 316), QPoint(825, 474), QPoint(825, 632)};
+QPoint qiziCoordinate[32] = {};
 QString qiziIsChuOrHan[32];
 QString chuhanRound = "none";
 QString PrechuhanRound = "none";
@@ -17,10 +31,10 @@ QString NetBinPath;
 fs::path saveDir = "Saved";
 QPushButton *allButton[32];
 QPushButton *chButton = nullptr;
-QTimer autoTimer;
-QNetworkReply* reply;
+QTimer* autoTimer = nullptr;
+QPointer<QNetworkReply> reply;
 QByteArray readInfo;
-QNetworkAccessManager tempManager;
+QNetworkAccessManager* tempManager = nullptr;
 QNetworkRequest request;
 AllST Steps;
 AllST StepsBak;
@@ -41,6 +55,100 @@ bool ifReadyRead = false;
 bool repl = false;
 double ti;
 char abc[] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'};
+
+
+// ==== UI scaling / layout config ====
+// The original UI was designed at 1299x796 in mainwindow.ui (absolute geometries).
+// Edit these two numbers to change the default window size at startup.
+static int g_uiStartWidth  = 1299;
+static int g_uiStartHeight = 796;
+
+// Keep aspect ratio when scaling the whole UI (recommended: true).
+static bool g_uiKeepAspect = true;
+
+// Base board geometry in the original design (pixels, relative to ui->centralwidget).
+static constexpr int kBaseStepX = 136;
+static constexpr int kBaseStepY = 79;
+static constexpr int kBaseRiverGap = 145; // extra gap between ranks 4 and 5
+static constexpr int kBasePieceSize = 68;
+
+static QPoint capturedOffboardPoint()
+{
+    // Always far off-screen regardless of scaling.
+    return QPoint(-10000, -10000);
+}
+
+static const QPoint kBaseQiziCoordinate[32] = {
+    QPoint(0, 0), QPoint(0, 632), QPoint(0, 79), QPoint(0, 553), QPoint(0, 158), QPoint(0, 474), QPoint(0, 237), QPoint(0, 395),
+    QPoint(0, 316), QPoint(272, 79), QPoint(272, 553), QPoint(408, 0), QPoint(408, 158), QPoint(408, 316), QPoint(408, 474), QPoint(408, 632),
+    QPoint(1233, 0), QPoint(1233, 632), QPoint(1233, 79), QPoint(1233, 553), QPoint(1233, 158), QPoint(1233, 474), QPoint(1233, 237), QPoint(1233, 395),
+    QPoint(1233, 316), QPoint(961, 79), QPoint(961, 553), QPoint(825, 0), QPoint(825, 158), QPoint(825, 316), QPoint(825, 474), QPoint(825, 632)
+};
+
+// Initial piece cell indices (file 0..8, rank 0..9). Computed from kBaseQiziCoordinate vs base grid.
+static int g_initFile[32];
+static int g_initRank[32];
+static bool g_initCellsReady = false;
+
+static QPoint baseGridPoint(int file, int rank)
+{
+    // file: 0..8 maps to Y, rank: 0..9 maps to X (project's coordinate convention)
+    const int y = file * kBaseStepY;
+    int x = 0;
+    if (rank <= 4)
+        x = rank * kBaseStepX;
+    else
+        x = 4 * kBaseStepX + kBaseRiverGap + (rank - 5) * kBaseStepX;
+    return QPoint(x, y);
+}
+
+static void ensureInitCells()
+{
+    if (g_initCellsReady) return;
+    for (int i = 0; i < 32; ++i) { g_initFile[i] = -1; g_initRank[i] = -1; }
+    for (int i = 0; i < 32; ++i)
+    {
+        const QPoint p = kBaseQiziCoordinate[i];
+        for (int file = 0; file < 9; ++file)
+        {
+            for (int rank = 0; rank < 10; ++rank)
+            {
+                if (p == baseGridPoint(file, rank))
+                {
+                    g_initFile[i] = file;
+                    g_initRank[i] = rank;
+                    file = 9; // break outer
+                    break;
+                }
+            }
+        }
+    }
+    g_initCellsReady = true;
+}
+
+
+// --- Cloudbook rule (queryrule) helpers ---
+// API doc: action=queryrule requires a starting FEN (board) and a movelist (>= 4 moves).
+// We keep a "rule base" snapshot (positions + side-to-move) and can send only the last few moves
+// by reconstructing the start position for that tail segment.
+static QVector<QPoint> g_ruleBasePositions;
+static QString g_ruleBaseFen;
+static bool g_ruleBaseReady = false;
+static inline QPoint kCapturedOffboard = capturedOffboardPoint();
+static const QPoint kCapturedCell(-1, -1); // must match analysisStep() capture hiding
+static int g_ruleTailMoves = 12;              // queryrule tail moves (>=4)
+static int g_ruleRepTimes = 1;                // queryrule reptimes (1~10)
+static bool g_ruleAvoidDraw = false;          // if true, treat rule:draw as ban
+static bool g_ruleEnable = true;              // if false, skip queryrule entirely
+
+// Forward declarations
+QString getFEN();
+int charToqipanInt(char charK);
+void resetRuleBase();
+static QString fenFromPositions(const QVector<QPoint>& pos, QChar sideToMove);
+static bool applyOneRecordedStep(QVector<QPoint>& pos, const QString& step);
+static bool buildQueryruleInputs(int tailMoves, QString& outStartFen, QString& outMovelist);
+static QString banFromQueryruleResponse(const QByteArray& ruleResp);
 
 void savStep(int ty, int tx, AllST &Steps){
     QStringList tmp;
@@ -129,7 +237,7 @@ bool CheckRoundCorrectAndSetRound()
 }
 void ShowfBoxAndQuash(QString text)
 {
-    autoTimer.stop();
+    autoTimer->stop();
     ifPressed = false;
     chuhanRound = PrechuhanRound;
     if (cStep.preButton == nullptr)
@@ -140,23 +248,37 @@ void ShowfBoxAndQuash(QString text)
     QMessageBox fBox;
     fBox.setText(text);
     fBox.exec();
-    cStep.preButton->move(cStep.prePoint);
+    // Snap back to the nearest valid cell. This is more robust than restoring
+    // the raw pixel coordinate when UI scaling/rounding is involved.
+    if (cStep.prePoint.x() < -1000 || cStep.prePoint.y() < -1000)
+    {
+        cStep.preButton->move(capturedOffboardPoint());
+    }
+    else
+    {
+        qint64 best = std::numeric_limits<qint64>::max();
+        QPoint bestPt = qipanCoordinates[0][0];
+        for (int f = 0; f < 9; ++f)
+        {
+            for (int r = 0; r < 10; ++r)
+            {
+                const QPoint gp = qipanCoordinates[f][r];
+                const qint64 dx = cStep.prePoint.x() - gp.x();
+                const qint64 dy = cStep.prePoint.y() - gp.y();
+                const qint64 d = dx * dx + dy * dy;
+                if (d < best)
+                {
+                    best = d;
+                    bestPt = gp;
+                }
+            }
+        }
+        cStep.preButton->move(bestPt);
+    }
     cStep = preStep();
-    autoTimer.start(1000);
+    autoTimer->start(1000);
 }
 
-void processNetReply()
-{
-    if (reply->error() == QNetworkReply::NoError) {
-        readInfo = reply->readAll();
-        //qDebug() << "Response data:" << readInfo;
-        ifReadyRead = true;
-    } else {
-        autoSum = 17;
-    }
-    reply->deleteLater();
-    reply=nullptr;
-}
 
 char qiziCharac(QPushButton *quButton)
 {
@@ -282,24 +404,298 @@ int charToqipanInt(char charK)
     }
     return -1;
 }
-void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
+
+
+void resetRuleBase()
 {
-    //qDebug() << QString::fromStdString(stepStr);
-    int charOne = charToqipanInt(stepStr[5]);
-    int charTwo = charToqipanInt(stepStr[7]);
+    // Store rule-base positions in *logical cells* (file 0..8, rank 0..9), independent of UI scaling.
+    // Captured pieces are stored as (-1,-1).
+    g_ruleBasePositions.resize(32);
+
+    auto pixelToCell = [](const QPoint& p) -> QPoint
+    {
+        if (p.x() < -1000 || p.y() < -1000) return kCapturedCell;
+
+        // Exact match first.
+        for (int file = 0; file < 9; ++file)
+        {
+            for (int rank = 0; rank < 10; ++rank)
+            {
+                if (p == qipanCoordinates[file][rank])
+                {
+                    return QPoint(file, rank);
+                }
+            }
+        }
+
+        // Fallback: nearest cell.
+        qint64 best = std::numeric_limits<qint64>::max();
+        int bf = 0, br = 0;
+        for (int file = 0; file < 9; ++file)
+        {
+            for (int rank = 0; rank < 10; ++rank)
+            {
+                const QPoint gp = qipanCoordinates[file][rank];
+                const qint64 dx = p.x() - gp.x();
+                const qint64 dy = p.y() - gp.y();
+                const qint64 d = dx * dx + dy * dy;
+                if (d < best)
+                {
+                    best = d;
+                    bf = file;
+                    br = rank;
+                }
+            }
+        }
+        return QPoint(bf, br);
+    };
+
+    for (int i = 0; i < 32; ++i)
+    {
+        if (allButton[i])
+        {
+            g_ruleBasePositions[i] = pixelToCell(QPoint(allButton[i]->x(), allButton[i]->y()));
+        }
+        else
+        {
+            g_ruleBasePositions[i] = kCapturedCell;
+        }
+    }
+
+    g_ruleBaseFen = getFEN();
+    g_ruleBaseReady = true;
+}
+
+static QChar sideFromFen(const QString& fen)
+{
+    const int sp = fen.lastIndexOf(' ');
+    if (sp >= 0 && sp + 1 < fen.size())
+    {
+        const QChar c = fen[sp + 1];
+        if (c == QChar('w') || c == QChar('b')) return c;
+    }
+    return QChar('w');
+}
+
+static QChar toggleSide(QChar c)
+{
+    return (c == QChar('w')) ? QChar('b') : QChar('w');
+}
+
+
+static QString fenFromPositions(const QVector<QPoint>& pos, QChar sideToMove)
+{
+    // pos[i] is a logical cell QPoint(file, rank), or kCapturedCell for captured.
+    QString fen;
+    for (int rank = 0; rank < 10; ++rank)
+    {
+        int spacenum = 0;
+        for (int file = 0; file < 9; ++file)
+        {
+            bool hasPiece = false;
+            int pieceIdx = -1;
+            const QPoint cell(file, rank);
+
+            for (int k = 0; k < 32; ++k)
+            {
+                if (pos[k] == cell)
+                {
+                    hasPiece = true;
+                    pieceIdx = k;
+                    break;
+                }
+            }
+
+            if (hasPiece)
+            {
+                if (spacenum != 0)
+                {
+                    fen += QString::number(spacenum);
+                    spacenum = 0;
+                }
+                fen += QChar(qiziCharac(allButton[pieceIdx]));
+            }
+            else
+            {
+                spacenum++;
+            }
+
+            if (file == 8 && spacenum != 0)
+            {
+                fen += QString::number(spacenum);
+            }
+        }
+        if (rank != 9) fen += "/";
+    }
+    fen += " ";
+    fen += sideToMove;
+    return fen;
+}
+
+
+static bool coordToCell(QChar fileChar, QChar digitChar, QPoint& outCell)
+{
+    const int file = charToqipanInt(fileChar.toLatin1());
+    const int digit = digitChar.digitValue();
+    if (file < 0 || file >= 9 || digit < 0 || digit > 9) return false;
+    const int rank = 9 - digit;
+    if (rank < 0 || rank >= 10) return false;
+    outCell = QPoint(file, rank);
+    return true;
+}
+
+
+
+static bool applyOneRecordedStep(QVector<QPoint>& pos, const QString& step)
+{
+    if (step.size() < 9 || !step.startsWith("move:")) return false;
+
+    QPoint fromCell, toCell;
+    if (!coordToCell(step[5], step[6], fromCell)) return false;
+    if (!coordToCell(step[7], step[8], toCell)) return false;
+
+    int mover = -1;
+    for (int i = 0; i < 32; ++i)
+    {
+        if (pos[i] == fromCell)
+        {
+            mover = i;
+            break;
+        }
+    }
+    if (mover == -1) return false;
+
+    // Captured piece index is recorded at [9..10] as "NU" or two digits.
+    if (step.size() >= 11 && step.mid(9, 2) != "NU")
+    {
+        bool ok = false;
+        const int capIdx = step.mid(9, 2).toInt(&ok);
+        if (ok && capIdx >= 0 && capIdx < 32)
+        {
+            pos[capIdx] = kCapturedCell;
+        }
+    }
+
+    pos[mover] = toCell;
+    return true;
+}
+
+static bool buildQueryruleInputs(int tailMoves, QString& outStartFen, QString& outMovelist)
+{
+    if (!g_ruleBaseReady || g_ruleBasePositions.size() != 32) return false;
+
+    const QStringList stepList = repl ? Steps.s_tmp : Steps.s;
+    const int total = stepList.size();
+    if (total < 4) return false; // API requires >= 4 moves 
+
+    int take = tailMoves;
+    if (take <= 0 || take > total) take = total;
+    if (take < 4) take = 4;
+    const int startIndex = total - take;
+
+    QVector<QPoint> pos = g_ruleBasePositions;
+
+    // Reconstruct the start position for the tail segment
+    for (int i = 0; i < startIndex; ++i)
+    {
+        if (!applyOneRecordedStep(pos, stepList[i]))
+        {
+            return false;
+        }
+    }
+
+    // Side-to-move at startIndex = base side toggled by number of moves applied.
+    QChar side = sideFromFen(g_ruleBaseFen);
+    if (startIndex % 2 == 1) side = toggleSide(side);
+
+    outStartFen = fenFromPositions(pos, side);
+
+    QStringList mv;
+    mv.reserve(take);
+    for (int i = startIndex; i < total; ++i)
+    {
+        const QString& s = stepList[i];
+        if (s.size() < 9 || !s.startsWith("move:")) return false;
+        mv.append(s.mid(5, 4)); // "c3c4"
+    }
+    outMovelist = mv.join("|");
+    return true;
+}
+
+static QString banFromQueryruleResponse(const QByteArray& ruleResp)
+{
+    const QString resp = QString::fromUtf8(ruleResp).trimmed();
+    if (resp.isEmpty()) return QString();
+
+    // Error cases like "invalid board" / "invalid movelist" / "checkmate" / "stalemate" etc. 
+    if (resp.startsWith("invalid") || resp.startsWith("checkmate") || resp.startsWith("stalemate"))
+    {
+        return QString();
+    }
+
+    // Format: move:[MOVE],rule:[RESULT] separated by '|'. RESULT: none/draw/ban 
+    QStringList banned;
+    const QStringList items = resp.split('|', Qt::SkipEmptyParts);
+    for (const QString& it : items)
+    {
+        const int mi = it.indexOf("move:");
+        const int ri = it.indexOf("rule:");
+        if (mi < 0 || ri < 0) continue;
+
+        const QString mv = it.mid(mi + 5, 4);
+        const QString rl = it.mid(ri + 5).trimmed();
+
+        if (mv.size() == 4 && rl.startsWith("ban"))
+        {
+            banned.append("move:" + mv);
+        }
+        else if (g_ruleAvoidDraw && mv.size() == 4 && rl.startsWith("draw"))
+        {
+            banned.append("move:" + mv);
+        }
+    }
+    return banned.join("|");
+}
+
+void MainWindow::analysisStep(const std::string& stepStr, bool ifnRepeat)
+{
+    // Expected format: "move:<a-i><0-9><a-i><0-9>..."
+    auto badStep = [this]() {
+        ui->pvp_radioButton->setChecked(true);
+        MainWindow::on_pvp_radioButton_clicked();
+        autoNum = 0;
+        QMessageBox box;
+        box.setText("出错了！无法解析步法字符串（存档/云库返回异常）。");
+        box.exec();
+    };
+
+    if (stepStr.size() < 9 || stepStr.rfind("move:", 0) != 0) {
+        badStep();
+        return;
+    }
+
+    const int charOne = charToqipanInt(stepStr[5]);
+    const int charTwo = charToqipanInt(stepStr[7]);
+
+    auto digitToInt = [](char c) -> int {
+        return (c >= '0' && c <= '9') ? (c - '0') : -1;
+    };
+    const int fromDigit = digitToInt(stepStr[6]);
+    const int toDigit   = digitToInt(stepStr[8]);
+
+    if (charOne < 0 || charTwo < 0 || fromDigit < 0 || toDigit < 0) {
+        badStep();
+        return;
+    }
+
+    const int intOne = 9 - fromDigit;
+    const int intTwo = 9 - toDigit;
+    if (intOne < 0 || intOne > 9 || intTwo < 0 || intTwo > 9) {
+        badStep();
+        return;
+    }
+
     int kq = -1;
-    std::stringstream stream;
-    stream << stepStr[6];
-    int intOne;
-    stream >> intOne;
-    stream.clear();
-    intOne = 9 - intOne;
-    stream << stepStr[8];
-    int intTwo;
-    stream >> intTwo;
-    stream.clear();
-    intTwo = 9 - intTwo;
-    //qDebug() << "YES1" << charOne << intOne;
     for (int k = 0; k < 32; k++)
     {
         if (QPoint(allButton[k]->x(), allButton[k]->y()) == qipanCoordinates[charOne][intOne])
@@ -338,7 +734,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
         {
             ifexate = true;
             yiqvshiStep = preStep(allButton[i], QPoint(allButton[i]->x(), allButton[i]->y()));
-            allButton[i]->move(-114, -514);
+            allButton[i]->move(capturedOffboardPoint());
             if (allButton[i] == ui->Chu_Jiang)
             {
                 ifOver = "Chu";
@@ -366,7 +762,9 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
     }
     if (ifOver == "Chu")
     {
-        QMessageBox::StandardButton result = QMessageBox::information(NULL, "胜负已分！", "恭喜红方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
+        QMessageBox::StandardButton result = QMessageBox::information(this, "胜负已分！",
+                                                                     "恭喜红方获胜！\n是否要重置对局？",
+                                                                     QMessageBox::Yes | QMessageBox::No);
         switch (result)
         {
         case QMessageBox::Yes:
@@ -377,7 +775,8 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
             ifOver = "none";
             chuhanRound = "none";
             Steps.s.clear();
-            PrechuhanRound = "none";
+            resetRuleBase();
+                PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
             if(autoNum == 3) on_pvp_radioButton_clicked();
             break;
@@ -390,7 +789,9 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
     }
     else if (ifOver == "Han")
     {
-        QMessageBox::StandardButton result = QMessageBox::information(NULL, "胜负已分！", "恭喜黑方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
+        QMessageBox::StandardButton result = QMessageBox::information(this, "胜负已分！",
+                                                                     "恭喜黑方获胜！\n是否要重置对局？",
+                                                                     QMessageBox::Yes | QMessageBox::No);
         switch (result)
         {
         case QMessageBox::Yes:
@@ -401,6 +802,7 @@ void MainWindow::analysisStep(std::string stepStr, bool ifnRepeat = true)
             }
             ifOver = "none";
             chuhanRound = "none";
+            resetRuleBase();
             PrechuhanRound = "none";
             MainWindow::on_Continue_clicked();
             if(autoNum == 3) on_pvp_radioButton_clicked();
@@ -420,7 +822,7 @@ void MainWindow::xiangqitimeEvent()
 {
     if (autoNum == 0)
     {
-        autoTimer.stop();
+        autoTimer->stop();
         return;
     }
     if (autoNum == -1 && chuhanRound != "Chu")
@@ -452,30 +854,112 @@ void MainWindow::xiangqitimeEvent()
             ui->Replay->setText("回放");
         }
     }
-
-    if (autoSum == 1 && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
+if (autoSum == 1 && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
+{
+    autoTimer->stop();
+    if (ui->pve_radioButton->isChecked())
     {
-        autoTimer.stop();
-        if (ui->pve_radioButton->isChecked())
-        {
-            difficulty = 7 - comboIndex * 2;
-        }
-        if (ui->eve_radioButton->isChecked())
-        {
-            difficulty = 9 - comboIndex / 2 * 4;
-        }
-        request.setUrl(QUrl("http://www.chessdb.cn/chessdb.php?action=queryall&board="+getFEN()+"&showall=1"));
-        reply = tempManager.get(request);
-        connect(reply, &QNetworkReply::finished, processNetReply);
-        autoTimer.start(1000);
+        difficulty = 7 - comboIndex * 2;
     }
+    if (ui->eve_radioButton->isChecked())
+    {
+        difficulty = 9 - comboIndex / 2 * 4;
+    }
+
+    // First ask the cloudbook to adjudicate repetition rules (queryrule) using recent move history.
+    // Then pass any "ban" (and optionally "draw") moves into queryall so the random selection won't pick illegal/undesired moves.
+    auto startQueryAll = [this](const QString& banParam) {
+        QUrl url("http://www.chessdb.cn/chessdb.php");
+        QUrlQuery q;
+        q.addQueryItem("action", "queryall");
+        q.addQueryItem("board", getFEN());
+        q.addQueryItem("showall", "1");
+        if (!banParam.isEmpty())
+        {
+            q.addQueryItem("ban", banParam);
+        }
+        url.setQuery(q);
+        request.setUrl(url);
+
+        reply = tempManager->get(request);
+        connect(reply, &QNetworkReply::finished, this, [this, r = reply.data()]() {
+            // Ignore stale/cancelled replies (e.g. user started dragging pieces)
+            if (reply.data() != r) {
+                if (r) r->deleteLater();
+                return;
+            }
+            if (!r) {
+                reply = nullptr;
+                return;
+            }
+            if (r->error() == QNetworkReply::NoError) {
+                readInfo = r->readAll();
+                ifReadyRead = true;
+                // Prevent the next timer tick from re-sending a new request before consuming ifReadyRead
+                autoSum = 0;
+            } else {
+                autoSum = 17;
+            }
+            r->deleteLater();
+            reply = nullptr;
+        });
+
+        autoTimer->start(1000);
+    };
+
+    QString startFen;
+    QString movelist;
+    if (g_ruleEnable && buildQueryruleInputs(g_ruleTailMoves, startFen, movelist))
+    {
+        ui->label_3->setText("云库棋规裁定中...");
+        QUrl url("http://www.chessdb.cn/chessdb.php");
+        QUrlQuery q;
+        q.addQueryItem("action", "queryrule");
+        q.addQueryItem("board", startFen);
+        q.addQueryItem("movelist", movelist);
+        if (g_ruleRepTimes >= 1 && g_ruleRepTimes <= 10)
+        {
+            q.addQueryItem("reptimes", QString::number(g_ruleRepTimes));
+        }
+        url.setQuery(q);
+        request.setUrl(url);
+
+        reply = tempManager->get(request);
+        connect(reply, &QNetworkReply::finished, this, [this, startQueryAll, r = reply.data()]() {
+            if (reply.data() != r) {
+                if (r) r->deleteLater();
+                return;
+            }
+            QString banParam;
+            if (r && r->error() == QNetworkReply::NoError)
+            {
+                banParam = banFromQueryruleResponse(r->readAll());
+            }
+            if (r) r->deleteLater();
+            reply = nullptr;
+
+            startQueryAll(banParam);
+        });
+    }
+    else
+    {
+        startQueryAll(QString());
+    }
+}
 
     if (ifReadyRead)
     {
-        autoTimer.stop();
+        autoTimer->stop();
         ifReadyRead = false;
         autoSum = 0;
         ui->label_3->setText("已成功连接至中国象棋云库！");
+        if (readInfo.size() < 4) {
+            // Avoid out-of-bounds access when the cloud returns an empty/short response
+            autoSum = 17;
+            ui->label_3->setText("云库返回异常：响应过短。");
+            autoTimer->start(1000);
+            return;
+        }
         if (readInfo[0] == 'm' && readInfo[1] == 'o' && readInfo[2] == 'v')
         {
             QByteArrayList BAList;
@@ -506,11 +990,11 @@ void MainWindow::xiangqitimeEvent()
                 t=0;
             }
             analysisStep(BAList[t].toStdString());
-            autoTimer.start(1000);
+            autoTimer->start(1000);
         }
         else if (readInfo[0] == 'E')
         {
-            autoTimer.stop();
+            autoTimer->stop();
             ui->pvp_radioButton->setChecked(true);
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
@@ -521,7 +1005,7 @@ void MainWindow::xiangqitimeEvent()
         }
         else if (readInfo[0] == 'i' && readInfo[1] == 'n')
         {
-            autoTimer.stop();
+            autoTimer->stop();
             ui->pvp_radioButton->setChecked(true);
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
@@ -531,7 +1015,7 @@ void MainWindow::xiangqitimeEvent()
         }
         else if ((readInfo[0] == 'u' && readInfo[1] == 'n') || (readInfo[0] == 'n' && readInfo[1] == 'o'))
         {
-            autoTimer.stop();
+            autoTimer->stop();
             ui->pvp_radioButton->setChecked(true);
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
@@ -541,7 +1025,7 @@ void MainWindow::xiangqitimeEvent()
         }
         else if ((readInfo[0] == 'c' && readInfo[1] == 'h') || (readInfo[0] == 's'))
         {
-            autoTimer.stop();
+            autoTimer->stop();
             ui->pvp_radioButton->setChecked(true);
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
@@ -552,7 +1036,7 @@ void MainWindow::xiangqitimeEvent()
         }
         else
         {
-            autoTimer.stop();
+            autoTimer->stop();
             ui->pvp_radioButton->setChecked(true);
             MainWindow::on_pvp_radioButton_clicked();
             autoNum = 0;
@@ -563,7 +1047,7 @@ void MainWindow::xiangqitimeEvent()
     }
     if (!ifReadyRead && autoSum > 16 && (ui->pve_radioButton->isChecked() || ui->eve_radioButton->isChecked()))
     {
-        autoTimer.stop();
+        autoTimer->stop();
         ui->pvp_radioButton->setChecked(true);
         MainWindow::on_pvp_radioButton_clicked();
         ui->label_3->setText("2型网络异常！");
@@ -586,31 +1070,284 @@ int absoluteValue(int ab)
     }
 }
 
+
+// ===== UI scaling helpers (Qt6, cross-platform) =====
+
+bool MainWindow::isPieceButton(const QWidget* w) const
+{
+    for (int i = 0; i < 32; ++i)
+    {
+        if (allButton[i] == w) return true;
+    }
+    return false;
+}
+
+void MainWindow::captureBaseLayout()
+{
+    if (m_baseCaptured) return;
+
+    // We cannot rely on ui->centralwidget->size() here because before the window is shown
+    // some platforms report a very small size. Instead, infer the design coordinate system
+    // from the authored geometries of direct children.
+    int maxRight = 0;
+    int maxBottom = 0;
+
+    const auto directChildren = ui->centralwidget->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+    for (QWidget* w : directChildren)
+    {
+        const QRect g = w->geometry();
+        m_baseGeom.insert(w, g);
+        const int pt = w->font().pointSize();
+        if (pt > 0) m_baseFontPt.insert(w, pt);
+
+        maxRight = std::max(maxRight, g.x() + g.width());
+        maxBottom = std::max(maxBottom, g.y() + g.height());
+    }
+
+    // Fallback: if the computed area is suspiciously small, use the original authoring size.
+    if (maxRight < 200 || maxBottom < 200)
+    {
+        m_designCentralSize = QSize(1299, 796);
+    }
+    else
+    {
+        m_designCentralSize = QSize(maxRight, maxBottom);
+    }
+
+    m_baseCaptured = true;
+}
+
+void MainWindow::prepareScalableImages()
+{
+    // Scale the board background with the label geometry.
+    if (ui->Qipan) ui->Qipan->setScaledContents(true);
+
+    // Convert piece buttons from background-image to border-image so they scale with geometry.
+    // (Qt styleSheet background-image does NOT scale by default.)
+    for (int i = 0; i < 32; ++i)
+    {
+        if (!allButton[i]) continue;
+        const QString ss = allButton[i]->styleSheet();
+        static const QRegularExpression re(R"(background-image\s*:\s*url\(([^)]+)\)\s*;?)");
+        const auto m = re.match(ss);
+        if (m.hasMatch())
+        {
+            const QString url = m.captured(1).trimmed();
+            allButton[i]->setStyleSheet(QString("border-image: url(%1) 0 0 0 0 stretch stretch; background: transparent; border: none;").arg(url));
+        }
+    }
+}
+
+void MainWindow::recomputeBoardCoordinates()
+{
+    if (!ui->Qipan) return;
+
+    const QRect br = ui->Qipan->geometry();
+    const int x0 = br.x();
+    const int y0 = br.y();
+
+    const int stepX = qMax(1, int(qRound(kBaseStepX * m_scaleX)));
+    const int stepY = qMax(1, int(qRound(kBaseStepY * m_scaleY)));
+    const int riverGap = qMax(0, int(qRound(kBaseRiverGap * m_scaleX)));
+
+    for (int file = 0; file < 9; ++file)
+    {
+        const int y = y0 + file * stepY;
+        for (int rank = 0; rank < 10; ++rank)
+        {
+            int x = 0;
+            if (rank <= 4)
+                x = x0 + rank * stepX;
+            else
+                x = x0 + 4 * stepX + riverGap + (rank - 5) * stepX;
+
+            qipanCoordinates[file][rank] = QPoint(x, y);
+        }
+    }
+
+    // Keep captured sentinel consistent with analysisStep() and queryrule reconstruction.
+    kCapturedOffboard = capturedOffboardPoint();
+}
+
+void MainWindow::updateInitialPieceCoords()
+{
+    ensureInitCells();
+    for (int i = 0; i < 32; ++i)
+    {
+        if (g_initFile[i] >= 0 && g_initRank[i] >= 0)
+            qiziCoordinate[i] = qipanCoordinates[g_initFile[i]][g_initRank[i]];
+        else
+            qiziCoordinate[i] = capturedOffboardPoint();
+    }
+}
+
+QVector<MainWindow::PieceCell> MainWindow::snapshotPieceCells() const
+{
+    QVector<PieceCell> cells;
+    cells.resize(32);
+
+    auto nearestCell = [&](const QPoint& pt, int& outFile, int& outRank) -> bool
+    {
+        qint64 best = std::numeric_limits<qint64>::max();
+        int bf = 0, br = 0;
+        for (int f = 0; f < 9; ++f)
+        {
+            for (int r = 0; r < 10; ++r)
+            {
+                const QPoint gp = qipanCoordinates[f][r];
+                const qint64 dx = pt.x() - gp.x();
+                const qint64 dy = pt.y() - gp.y();
+                const qint64 d = dx * dx + dy * dy;
+                if (d < best)
+                {
+                    best = d;
+                    bf = f;
+                    br = r;
+                }
+            }
+        }
+        outFile = bf;
+        outRank = br;
+        return true;
+    };
+
+    for (int i = 0; i < 32; ++i)
+    {
+        if (!allButton[i]) { cells[i].captured = true; continue; }
+        const QPoint p(allButton[i]->x(), allButton[i]->y());
+        if (p.x() < -1000 || p.y() < -1000)
+        {
+            cells[i].captured = true;
+            continue;
+        }
+
+        // Exact match first (fast path).
+        bool found = false;
+        for (int f = 0; f < 9 && !found; ++f)
+        {
+            for (int r = 0; r < 10; ++r)
+            {
+                if (p == qipanCoordinates[f][r])
+                {
+                    cells[i].file = f;
+                    cells[i].rank = r;
+                    cells[i].captured = false;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found)
+        {
+            int f = 0, r = 0;
+            nearestCell(p, f, r);
+            cells[i].file = f;
+            cells[i].rank = r;
+            cells[i].captured = false;
+        }
+    }
+    return cells;
+}
+
+void MainWindow::restorePieceCells(const QVector<PieceCell>& cells)
+{
+    for (int i = 0; i < 32 && i < cells.size(); ++i)
+    {
+        if (!allButton[i]) continue;
+        if (cells[i].captured)
+        {
+            allButton[i]->move(capturedOffboardPoint());
+        }
+        else if (cells[i].file >= 0 && cells[i].file < 9 && cells[i].rank >= 0 && cells[i].rank < 10)
+        {
+            allButton[i]->move(qipanCoordinates[cells[i].file][cells[i].rank]);
+        }
+    }
+}
+
+void MainWindow::applyScaledLayout()
+{
+    if (!m_baseCaptured) return;
+
+    const int cw = ui->centralwidget->width();
+    const int ch = ui->centralwidget->height();
+
+    double sx = (m_designCentralSize.width() > 0) ? (double(cw) / double(m_designCentralSize.width())) : 1.0;
+    double sy = (m_designCentralSize.height() > 0) ? (double(ch) / double(m_designCentralSize.height())) : 1.0;
+
+    if (g_uiKeepAspect)
+    {
+        const double s = std::min(sx, sy);
+        sx = s;
+        sy = s;
+    }
+
+    const int dx = int(qRound((cw - m_designCentralSize.width() * sx) / 2.0));
+    const int dy = int(qRound((ch - m_designCentralSize.height() * sy) / 2.0));
+
+    m_scaleX = sx;
+    m_scaleY = sy;
+    m_offset = QPoint(dx, dy);
+
+    const double fontScale = std::min(sx, sy);
+
+    // Scale all direct children of centralwidget using their design geometries.
+    for (auto it = m_baseGeom.constBegin(); it != m_baseGeom.constEnd(); ++it)
+    {
+        QWidget* w = it.key();
+        if (!w) continue;
+
+        if (isPieceButton(w))
+            continue; // handled separately
+
+        const QRect b = it.value();
+        const QRect nr(
+            dx + int(qRound(b.x() * sx)),
+            dy + int(qRound(b.y() * sy)),
+            qMax(1, int(qRound(b.width() * sx))),
+            qMax(1, int(qRound(b.height() * sy)))
+        );
+        w->setGeometry(nr);
+
+        if (m_baseFontPt.contains(w))
+        {
+            QFont f = w->font();
+            f.setPointSizeF(qMax(1.0, m_baseFontPt.value(w) * fontScale));
+            w->setFont(f);
+        }
+    }
+
+    // Piece size scales with overall scale (keep aspect).
+    m_pieceSize = qMax(1, int(qRound(kBasePieceSize * fontScale)));
+    for (int i = 0; i < 32; ++i)
+    {
+        if (!allButton[i]) continue;
+        allButton[i]->setFixedSize(m_pieceSize, m_pieceSize);
+    }
+
+    // Update board grid coordinates and initial placement map.
+    recomputeBoardCoordinates();
+    updateInitialPieceCoords();
+}
+
+// ===== end UI scaling helpers =====
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    // Create QObjects after QApplication is initialized (Qt6, cross-platform safe)
+    autoTimer = new QTimer(this);
+    tempManager = new QNetworkAccessManager(this);
+    reply = nullptr;
     /*
     QImage bgimg;
     bgimg.load(QString(":/Img/Img/Qipan.png"));
     ui->Qipan->setPixmap(QPixmap::fromImage(bgimg));
     */
-    for (int i = 0; i < 9; i++)
-    {
-        for (int s = 0; s < 10; s++)
-        {
-            if (s <= 4)
-            {
-                qipanCoordinates[i][s] = QPoint(s * 136, i * 79);
-                //qDebug() << qipanCoordinates[i][s];
-            }
-            else
-            {
-                qipanCoordinates[i][s] = QPoint(1233 - 136 * (9 - s), i * 79);
-                //qDebug() << qipanCoordinates[i][s];
-            }
-        }
-    }
+    // UI scale/board coords will be computed in applyScaledLayout().
+    ensureInitCells();
     allButton[0] = ui->Chu_Jv1;
     allButton[1] = ui->Chu_Jv2;
     allButton[2] = ui->Chu_Ma1;
@@ -659,21 +1396,108 @@ MainWindow::MainWindow(QWidget *parent)
             qiziIsChuOrHan[i] = "Han";
         }
     }
-    connect(&autoTimer, SIGNAL(timeout()), this, SLOT(xiangqitimeEvent()));
+    connect(autoTimer, &QTimer::timeout, this, &MainWindow::xiangqitimeEvent);
     ui->pvp_radioButton->setChecked(true);
     ui->Continue->setEnabled(false);
     ui->Replay->setEnabled(false);
-    connect(ui->actionAbout, SIGNAL(triggered()), this, SLOT(myabout()));
+    connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::myabout);
+
+
+// Load cloudbook settings (cross-platform, Qt6). Stored per-user.
+{
+    QSettings s("Xiangqi197", "Xiangqi");
+    g_ruleEnable = s.value("cloudbook/enableQueryrule", true).toBool();
+    g_ruleTailMoves = s.value("cloudbook/ruleTailMoves", 12).toInt();
+    if (g_ruleTailMoves < 4) g_ruleTailMoves = 4;
+    g_ruleRepTimes = s.value("cloudbook/reptimes", 1).toInt();
+    if (g_ruleRepTimes < 1) g_ruleRepTimes = 1;
+    if (g_ruleRepTimes > 10) g_ruleRepTimes = 10;
+    g_ruleAvoidDraw = s.value("cloudbook/avoidDraw", false).toBool();
+}
+// NOTE: Do NOT connect this action manually.
+// Qt Designer's connectSlotsByName will auto-connect
+// actionCloudbookSettings::triggered() -> on_actionCloudbookSettings_triggered().
+// If we connect again here, the slot will run twice and the dialog appears twice.
+
+
+
+
+// ----- UI scaling init -----
+captureBaseLayout();
+prepareScalableImages();
+
+// Apply desired startup size (edit g_uiStartWidth / g_uiStartHeight at top of this file).
+if (g_uiStartWidth > 0 && g_uiStartHeight > 0)
+{
+    this->resize(g_uiStartWidth, g_uiStartHeight);
+}
+
+// IMPORTANT: Do NOT call applyScaledLayout() here.
+// Before the window is shown, some platforms report a very small centralwidget size,
+// which would make the scale factor enormous ("one piece fills the window").
+// We defer the first scaling pass to showEvent() (via a 0ms singleShot).
+
 }
 
 MainWindow::~MainWindow()
 {
-    if(reply)
-    {
-        delete reply;
+    if (reply) {
+        reply->abort();
+        reply->deleteLater();
+        reply = nullptr;
     }
+    if (autoTimer) {
+        autoTimer->stop();
+        // autoTimer has parent 'this' and will be deleted automatically
+        autoTimer = nullptr;
+    }
+    // tempManager has parent 'this' and will be deleted automatically
+    tempManager = nullptr;
     delete ui;
 }
+
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    if (m_firstShowApplied) return;
+
+    // Defer the very first scaling pass to the next event loop turn so that
+    // centralwidget and its children have their final, platform-correct sizes.
+    QTimer::singleShot(0, this, [this]() {
+        if (m_firstShowApplied) return;
+        captureBaseLayout();
+        applyScaledLayout();
+        for (int i = 0; i < 32; ++i)
+        {
+            if (allButton[i]) allButton[i]->move(qiziCoordinate[i]);
+        }
+        // Record the starting position for cloudbook queryrule after the UI/pieces are placed.
+        resetRuleBase();
+        m_firstShowApplied = true;
+    });
+}
+
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+
+    if (!m_baseCaptured) return;
+
+    // Avoid fighting with dragging.
+    if (ifPressed) return;
+
+    // Until the first show/layout pass completes (showEvent singleShot), do not attempt
+    // to scale here; doing so can use an incorrect (tiny) centralwidget size on some platforms.
+    if (!m_firstShowApplied) return;
+
+    const auto cells = snapshotPieceCells();
+    applyScaledLayout();
+    restorePieceCells(cells);
+}
+
 
 preStep::preStep(QPushButton *button, QPoint point)
 {
@@ -689,7 +1513,13 @@ preStep::preStep()
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+    QMouseEvent *mouseEvent = nullptr;
+    if (event->type() == QEvent::MouseButtonPress ||
+        event->type() == QEvent::MouseButtonRelease ||
+        event->type() == QEvent::MouseMove)
+    {
+        mouseEvent = static_cast<QMouseEvent *>(event);
+    }
     if (event->type() == QEvent::MouseButtonPress)
     {
         if (ifOver != "none")
@@ -713,7 +1543,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             Box.exec();
             return true;
         }
-        autoTimer.stop();
+        autoTimer->stop();
         if(reply) {reply->abort();
             reply->deleteLater();
             reply=nullptr;}
@@ -725,6 +1555,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         {
             if (event->type() == QEvent::MouseButtonPress)
             {
+                if (!mouseEvent) return true;
                 chButton = allButton[B];
                 ifPressed = true;
                 chButton->raise();
@@ -738,6 +1569,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             }
             else if (event->type() == QEvent::MouseMove && ifPressed)
             {
+                if (!mouseEvent) return true;
                 chButton->move(mouseEvent->x() + chButton->x() - relaPoint.x(), mouseEvent->y() + chButton->y() - relaPoint.y());
                 return true;
             }
@@ -749,53 +1581,66 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     */
     if (event->type() == QEvent::MouseButtonRelease)
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
         if (chButton == nullptr || cStep.preButton == nullptr)
         {
             return true;
         }
         ifPressed = false;
-        int rx, ry;
-        rx = (chButton->x() / 68 + 1) / 2;
-        ry = (chButton->y() / 39.5 + 1) / 2;
-        if (rx > 4)
+        int rx = 0, ry = 0;
+        // Snap to the nearest board intersection using the current scaled grid.
         {
-            rx = 9 - ((1233 - chButton->x()) / 68 + 1) / 2;
-        }
-        else if (rx < 0)
-        {
-            rx = 0;
-        }
-        if (rx > 9)
-        {
-            rx = 9;
-        }
-        if (ry < 0)
-        {
-            ry = 0;
-        }
-        else if (ry > 8)
-        {
-            ry = 8;
-        }
-        int rw, rh;
-        for (rh = 0; rh < 9; rh++)
-        {
-            for (rw = 0; rw < 10; rw++)
+            qint64 best = std::numeric_limits<qint64>::max();
+            int bf = 0, br = 0;
+            const QPoint pt(chButton->x(), chButton->y());
+            for (int f = 0; f < 9; ++f)
             {
-                if (cStep.prePoint == qipanCoordinates[rh][rw])
+                for (int r = 0; r < 10; ++r)
                 {
-                    goto nextStep1;
+                    const QPoint gp = qipanCoordinates[f][r];
+                    const qint64 dx = pt.x() - gp.x();
+                    const qint64 dy = pt.y() - gp.y();
+                    const qint64 d = dx * dx + dy * dy;
+                    if (d < best)
+                    {
+                        best = d;
+                        bf = f;
+                        br = r;
+                    }
+                }
+            }
+            ry = bf; // file (0..8)
+            rx = br; // rank (0..9)
+        }
+        // Determine the starting cell (file/rank) from the original point.
+        // Using nearest-cell here makes the logic robust to rounding / scaling.
+        int rh = 0; // start file
+        int rw = 0; // start rank
+        {
+            qint64 best = std::numeric_limits<qint64>::max();
+            for (int f = 0; f < 9; ++f)
+            {
+                for (int r = 0; r < 10; ++r)
+                {
+                    const QPoint gp = qipanCoordinates[f][r];
+                    const qint64 dx = cStep.prePoint.x() - gp.x();
+                    const qint64 dy = cStep.prePoint.y() - gp.y();
+                    const qint64 d = dx * dx + dy * dy;
+                    if (d < best)
+                    {
+                        best = d;
+                        rh = f;
+                        rw = r;
+                    }
                 }
             }
         }
-    nextStep1:
         int pWidth, pHeight;
         pWidth = rx - rw;
         pHeight = ry - rh;
         if (pWidth == 0 && pHeight == 0)
         {
-            cStep.preButton->move(cStep.prePoint);
+            cStep.preButton->move(qipanCoordinates[rh][rw]);
             cStep = preStep();
             chuhanRound = PrechuhanRound;
             return true;
@@ -1090,7 +1935,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     }
                 }
                 yiqvshiStep = preStep(allButton[i], QPoint(allButton[i]->x(), allButton[i]->y()));
-                allButton[i]->move(-114, -514);
+                allButton[i]->move(capturedOffboardPoint());
                 if (allButton[i] == ui->Chu_Jiang)
                 {
                     ifOver = "Chu";
@@ -1140,7 +1985,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
         if (ifOver == "Chu")
         {
-            QMessageBox::StandardButton result = QMessageBox::information(NULL, "胜负已分！", "恭喜红方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
+            QMessageBox::StandardButton result = QMessageBox::information(this, "胜负已分！", "恭喜红方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
             switch (result)
             {
             case QMessageBox::Yes:
@@ -1151,6 +1996,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 ifOver = "none";
                 chuhanRound = "none";
                 Steps.s.clear();
+                resetRuleBase();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
                 if(autoNum == 3) on_pvp_radioButton_clicked();
@@ -1164,7 +2010,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
         else if (ifOver == "Han")
         {
-            QMessageBox::StandardButton result = QMessageBox::information(NULL, "胜负已分！", "恭喜黑方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
+            QMessageBox::StandardButton result = QMessageBox::information(this, "胜负已分！", "恭喜黑方获胜！\n是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
             switch (result)
             {
             case QMessageBox::Yes:
@@ -1175,6 +2021,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 ifOver = "none";
                 chuhanRound = "none";
                 Steps.s.clear();
+                resetRuleBase();
                 PrechuhanRound = "none";
                 MainWindow::on_Continue_clicked();
                 if(autoNum == 3) on_pvp_radioButton_clicked();
@@ -1188,13 +2035,14 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
         chButton = nullptr;
         savStep(ry, rx,Steps);
+        return true;
     }
     return false;
 }
 
 void MainWindow::on_Start_clicked()
 {
-    QMessageBox::StandardButton result = QMessageBox::information(NULL, "开始", "是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
+    QMessageBox::StandardButton result = QMessageBox::information(this, "开始", "是否要重置对局？", QMessageBox::Yes | QMessageBox::No);
     switch (result)
     {
     case QMessageBox::Yes:
@@ -1218,6 +2066,7 @@ void MainWindow::on_Start_clicked()
         huiqiStep = preStep();
         MainWindow::on_Continue_clicked();
         Steps.s.clear();
+        resetRuleBase();
         StepsBak = AllST();
         break;
     default:
@@ -1237,7 +2086,7 @@ void MainWindow::on_Pause_clicked()
     ui->Pause->setEnabled(false);
     Pause = true;
     ui->label_3->setText("已暂停");
-    autoTimer.stop();
+    autoTimer->stop();
     if(reply){
         reply->abort();
         reply->deleteLater();
@@ -1254,11 +2103,11 @@ void MainWindow::on_Continue_clicked()
     ui->label_3->setText("已取消暂停");
     if (!ui->pvp_radioButton->isChecked())
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
     }
     if (autoNum == 3){
         autoSum = SumBak;
-        autoTimer.start(ti*1000);
+        autoTimer->start(ti*1000);
     }
     ui->Pause->setEnabled(true);
     ui->Continue->setEnabled(false);
@@ -1291,21 +2140,44 @@ void MainWindow::on_Repent_clicked()
     if(reply) {reply->abort();
     reply->deleteLater();
         reply=nullptr;}
-    autoTimer.stop();
+    autoTimer->stop();
     autoSum = 0;
     ifReadyRead = false;
-    int s = Steps.s.length() - 1;
-    QChar t,r;
-    //qDebug() << Steps.s[s];
-    t = Steps.s[s][7];
-    r = Steps.s[s][8];
-    Steps.s[s][7] = Steps.s[s][5];
-    Steps.s[s][8] = Steps.s[s][6];
-    Steps.s[s][5] = t;
-    Steps.s[s][6] = r;
-    analysisStep(Steps.s[s].toStdString(), false);
-    //qDebug() << qipanCoordinates[charToqipanInt(Steps.s[s][7].toLatin1())][9-QString(Steps.s[s][8]).toInt()] << charToqipanInt(Steps.s[s][7].toLatin1()) << 9-QString(Steps.s[s][8]).toInt() << Steps.s[s].mid(9,2).toInt();
-    if(Steps.s[s][9] != 'N') allButton[Steps.s[s].mid(9,2).toInt()]->move(qipanCoordinates[charToqipanInt(Steps.s[s][5].toLatin1())][9-QString(Steps.s[s][6]).toInt()]);
+    const int s = Steps.s.length() - 1;
+    const QString stepOrig = Steps.s[s];
+    if (stepOrig.size() < 9 || !stepOrig.startsWith("move:"))
+    {
+        QMessageBox box;
+        box.setText("悔棋出错：步法记录损坏。");
+        box.exec();
+        MainWindow::setEnabled(true);
+        return;
+    }
+
+    // Swap <from> and <to> to revert the last move
+    QString step = stepOrig;
+    QChar t = step[7];
+    QChar r = step[8];
+    step[7] = step[5];
+    step[8] = step[6];
+    step[5] = t;
+    step[6] = r;
+
+    analysisStep(step.toStdString(), false);
+
+    // Restore captured piece (if any)
+    if (step.size() >= 11 && step[9] != QChar('N'))
+    {
+        bool ok = false;
+        const int capIdx = step.mid(9, 2).toInt(&ok);
+        const int fx = charToqipanInt(step[5].toLatin1());
+        const int fy = 9 - QString(step[6]).toInt();
+        if (ok && capIdx >= 0 && capIdx < 32 && fx >= 0 && fx < 9 && fy >= 0 && fy < 10)
+        {
+            allButton[capIdx]->move(qipanCoordinates[fx][fy]);
+        }
+    }
+
     Steps.s.removeAt(s);
     if (chuhanRound == "Chu")
     {
@@ -1330,7 +2202,7 @@ void MainWindow::on_pve_radioButton_clicked()
     ui->Replay->setText("回放");
     ui->Replay->setEnabled(false);
     //StepsBak = AllST();
-    autoTimer.stop();
+    autoTimer->stop();
     QStringList items = {"楚（黑方）", "汉（红方）"};
     QString item = QInputDialog::getItem(this, "人机对战", "请选择作为电脑的一方:", items, 0, false);
     if (item == "楚（黑方）")
@@ -1361,7 +2233,7 @@ void MainWindow::on_pve_radioButton_clicked()
     saveNum = autoNum;
     if (!Pause)
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
     }
 }
 
@@ -1397,7 +2269,7 @@ void MainWindow::on_eve_radioButton_clicked()
     ui->label_3->setText("切换完毕！");
     if (!Pause)
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
     }
 }
 
@@ -1415,7 +2287,7 @@ void MainWindow::on_Save_clicked()
         plzBox.exec();
         return;
     }
-    autoTimer.stop();
+    autoTimer->stop();
     if(reply){
         reply->abort();
     reply->deleteLater();
@@ -1458,14 +2330,14 @@ void MainWindow::on_Save_clicked()
     fout.close();
     if (!Pause)
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
     }
     return;
 }
 
 void MainWindow::on_Load_clicked()
 {
-    autoTimer.stop();
+    autoTimer->stop();
     if(reply){
         reply->abort();
     reply->deleteLater();
@@ -1520,6 +2392,9 @@ void MainWindow::on_Load_clicked()
             {
                 chuhanRound = "none";
             }
+
+            // The move list in the file starts from this position, so use it as queryrule base.
+            resetRuleBase();
         }
         a++;
     }
@@ -1531,7 +2406,7 @@ void MainWindow::on_Load_clicked()
     MainWindow::on_Continue_clicked();
     if (!Pause)
     {
-        autoTimer.start(1000);
+        autoTimer->start(1000);
     }
     //qDebug() << Steps.s << "\n" << "and";
     //qDebug() << Steps.s_tmp;
@@ -1550,7 +2425,7 @@ void MainWindow::on_pvp_radioButton_clicked()
         repl = false;
         //qDebug() << Steps.s << "!!!";
     }
-    autoTimer.stop();
+    autoTimer->stop();
     ui->Replay->setText("回放");
     ui->label_3->setText("正在执行切换，请耐心等待...");
     saveNum = autoNum;
@@ -1572,9 +2447,65 @@ void MainWindow::myabout()
     aboBox.exec();
 }
 
+
+void MainWindow::on_actionCloudbookSettings_triggered()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle("云库设置");
+    QFormLayout* form = new QFormLayout(&dlg);
+
+    QCheckBox* cbEnable = new QCheckBox("启用棋规裁定（queryrule）", &dlg);
+    cbEnable->setChecked(g_ruleEnable);
+
+    QSpinBox* sbTail = new QSpinBox(&dlg);
+    sbTail->setRange(4, 200);
+    sbTail->setValue(g_ruleTailMoves);
+    sbTail->setToolTip("发送给 queryrule 的最近历史着法步数（至少 4 步）。");
+
+    QSpinBox* sbRep = new QSpinBox(&dlg);
+    sbRep->setRange(1, 10);
+    sbRep->setValue(g_ruleRepTimes);
+    sbRep->setToolTip("reptimes：从第几次循环开始裁定（1~10）。");
+
+    QCheckBox* cbAvoidDraw = new QCheckBox("避免和棋着法（将 rule:draw 也视为 ban）", &dlg);
+    cbAvoidDraw->setChecked(g_ruleAvoidDraw);
+
+    form->addRow(cbEnable);
+    form->addRow("历史步数（movelist）:", sbTail);
+    form->addRow("reptimes:", sbRep);
+    form->addRow(cbAvoidDraw);
+
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    form->addRow(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() == QDialog::Accepted)
+    {
+        g_ruleEnable = cbEnable->isChecked();
+        g_ruleTailMoves = sbTail->value();
+        if (g_ruleTailMoves < 4) g_ruleTailMoves = 4;
+        g_ruleRepTimes = sbRep->value();
+        if (g_ruleRepTimes < 1) g_ruleRepTimes = 1;
+        if (g_ruleRepTimes > 10) g_ruleRepTimes = 10;
+        g_ruleAvoidDraw = cbAvoidDraw->isChecked();
+
+        QSettings s("Xiangqi197", "Xiangqi");
+        s.setValue("cloudbook/enableQueryrule", g_ruleEnable);
+        s.setValue("cloudbook/ruleTailMoves", g_ruleTailMoves);
+        s.setValue("cloudbook/reptimes", g_ruleRepTimes);
+        s.setValue("cloudbook/avoidDraw", g_ruleAvoidDraw);
+
+        ui->label_3->setText(QString("云库设置已保存：%1，步数=%2，reptimes=%3%4")
+                             .arg(g_ruleEnable ? "启用裁定" : "关闭裁定")
+                             .arg(g_ruleTailMoves)
+                             .arg(g_ruleRepTimes)
+                             .arg(g_ruleAvoidDraw ? "，避和棋" : ""));
+    }
+}
 void MainWindow::on_Replay_clicked()
 {
-    autoTimer.stop();
+    autoTimer->stop();
     QStringList items = {"0.1","0.2","0.4","1.0","2.0","2.5","4.0"};
     QString item = QInputDialog::getItem(this, "回放", "请选择时钟周期，单位：秒", items, 0, false);
     double t;
@@ -1587,7 +2518,6 @@ void MainWindow::on_Replay_clicked()
     chuhanRound = "none";
     PrechuhanRound = "none";
     ui->pvp_radioButton->setChecked(true);
-    ui->pvp_radioButton->setChecked(false);
     on_pvp_radioButton_clicked();
     ui->Replay->setText("回放中");
     if (Steps.s.length()){
@@ -1599,7 +2529,6 @@ void MainWindow::on_Replay_clicked()
     ui->Repent->setEnabled(false);
     autoSum = 0;
     autoNum = 3;
-    autoTimer.start(1000*t);
+    autoTimer->start(1000*t);
     ti = t;
 }
-

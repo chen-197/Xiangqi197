@@ -761,11 +761,17 @@
     <property name="title">
      <string>菜单</string>
     </property>
+    <addaction name="actionCloudbookSettings"/>
     <addaction name="actionAbout"/>
    </widget>
    <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionCloudbookSettings">
+   <property name="text">
+    <string>云库设置...</string>
+   </property>
+  </action>
   <action name="actionAbout">
    <property name="text">
     <string>关于</string>
